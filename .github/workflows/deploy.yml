@@ -1,0 +1,63 @@
+name: Deploy to Firebase
+
+on:
+  push:
+    branches: [main]
+
+# Only one deploy runs at a time; new pushes cancel the in-progress one.
+concurrency:
+  group: firebase-deploy
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ── Frontend ──────────────────────────────────────────────────────────
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+
+      # ── Cloud Functions ───────────────────────────────────────────────────
+
+      - name: Install functions dependencies
+        run: npm ci
+        working-directory: functions
+
+      - name: Build functions
+        run: npm run build
+        working-directory: functions
+
+      # ── Deploy ────────────────────────────────────────────────────────────
+      # Uses FIREBASE_TOKEN from `firebase login:ci` (see README for setup).
+      # To rotate: run `firebase login:ci` again and update the secret.
+
+      - name: Deploy hosting + functions to Firebase
+        run: >
+          npx firebase-tools@latest deploy
+          --only hosting,functions
+          --project ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          --non-interactive
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}

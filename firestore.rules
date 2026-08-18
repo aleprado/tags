@@ -1,0 +1,29 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users: solo el propio usuario puede leer/escribir su documento
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Tags: lectura pública (perfil QR), escritura solo del dueño
+    match /tags/{tagId} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if request.auth != null
+        && resource.data.ownerUid == request.auth.uid;
+    }
+
+    // Codes: lectura pública; admins pueden actualizar (marcar vendido);
+    // creación/borrado solo via Cloud Functions
+    match /codes/{codeId} {
+      allow read: if true;
+      allow update: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow create, delete: if false;
+    }
+  }
+}

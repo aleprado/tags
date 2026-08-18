@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+functions/node_modules/
+functions/lib/
+
+# Build output
+dist/
+
+# Environment variables
+.env
+.env.local
+
+# Firebase
+.firebase/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/

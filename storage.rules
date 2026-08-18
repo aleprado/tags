@@ -1,0 +1,21 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Fotos de mascotas: solo el dueño puede subir/borrar,
+    // cualquiera puede leer (para el perfil público)
+    match /pets/{uid}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == uid
+        && request.resource.size < 5 * 1024 * 1024  // máx 5 MB
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // QR codes generados por la Cloud Function (acceso público de lectura)
+    match /qr/{allPaths=**} {
+      allow read: if true;
+      allow write: if false; // solo Cloud Functions
+    }
+  }
+}

@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/organic-aa92b7d4-0275-448b-87ee-778a5026e092/styles.css">
+  <script src="_ds/organic-aa92b7d4-0275-448b-87ee-778a5026e092/_ds_bundle.js"></script>
+  <script src="./image-slot.js"></script>
+  <style>
+    html,body{margin:0;box-sizing:border-box}
+    *,*::before,*::after{box-sizing:inherit}
+    a{color:var(--color-accent)}
+    a:hover{color:var(--color-accent-700)}
+    .hu-scroll{scrollbar-width:none}
+    .hu-scroll::-webkit-scrollbar{display:none}
+  </style>
+</helmet>
+<div style="background:var(--color-bg);min-height:100vh;padding:var(--space-8) var(--space-4) 64px;display:flex;flex-direction:column;align-items:center;gap:var(--space-6);font-family:var(--font-body)">
+
+  <div style="display:flex;flex-direction:column;align-items:center;gap:var(--space-2);text-align:center">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:40px;height:40px;border-radius:50%;background:var(--color-accent-100);display:flex;align-items:center;justify-content:center;flex:none">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8c491a" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/><path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z"/></svg>
+      </div>
+      <h1 style="font-size:28px;margin:0">Huellitas</h1>
+    </div>
+    <p style="margin:0;max-width:520px;opacity:0.75;font-size:14px">Mockup del MVP — identificación de mascotas y objetos con QR. Elegí una pantalla para revisarla en el dispositivo.</p>
+  </div>
+
+  <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px;max-width:640px">
+    <sc-for list="{{ screens }}" as="scr" hint-placeholder-count="5">
+      <button type="button" onClick="{{ scr.onClick }}" style="{{ scr.btnStyle }}">{{ scr.label }}</button>
+    </sc-for>
+  </div>
+
+  <div class="seg" style="background:var(--color-surface)">
+    <label class="seg-opt"><input type="radio" name="viewmode" checked="{{ isMobileView }}" onChange="{{ setMobileView }}"/><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>Móvil</label>
+    <label class="seg-opt"><input type="radio" name="viewmode" checked="{{ isDesktopView }}" onChange="{{ setDesktopView }}"/><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Escritorio</label>
+  </div>
+
+  <sc-if value="{{ isMobileView }}" hint-placeholder-val="{{ true }}">
+  <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" title="{{ activeTitle }}" hint-size="390,844">
+
+    <sc-if value="{{ isScreen0 }}" hint-placeholder-val="{{ true }}">
+      <div class="hu-scroll" style="height:100%;overflow-y:auto;background:var(--color-bg);padding:28px 20px 40px;display:flex;flex-direction:column;gap:var(--space-4)">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:10px;padding-top:8px">
+          <div class="washed" style="width:132px;height:132px;border-radius:50%;overflow:hidden;box-shadow:var(--shadow-md)">
+            <image-slot id="pet-avatar" shape="circle" placeholder="Foto de Rocco" style="width:100%;height:100%"></image-slot>
+          </div>
+          <h2 style="margin:6px 0 0;font-size:26px">Rocco</h2>
+          <div style="display:flex;gap:6px">
+            <span class="tag tag-accent">Perro · Labrador</span>
+            <span class="tag tag-accent-2">{{ profileStatusLabel }}</span>
+          </div>
+        </div>
+
+        <div class="card elev-sm" style="gap:var(--space-2)">
+          <div class="card-kicker">Salud</div>
+          <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+            <div style="display:flex;align-items:center;gap:8px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8c491a" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Alergia leve al polen</div>
+            <div style="display:flex;align-items:center;gap:8px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8c491a" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Vacunas al día</div>
+          </div>
+        </div>
+
+        <div class="card elev-sm" style="gap:var(--space-2)">
+          <div class="card-kicker">Contacto del dueño</div>
+          <div class="card-title" style="font-size:16px">María López</div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
+            <button type="button" class="btn btn-primary btn-block"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21l1.65-4.95A9 9 0 1 1 8 19.5z"/><path d="M9 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0zm5 0a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0zm-8.5 3.5c1 2 3 3.5 6.5 3.5"/></svg>Escribir por WhatsApp</button>
+            <button type="button" class="btn btn-secondary btn-block"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465a1 1 0 0 1 1.31-.238 7.5 7.5 0 0 1 1.976 1.755 1 1 0 0 1-.072 1.268l-.8.9a1.44 1.44 0 0 1-1.291.48c-3.65-.5-6.9-3.75-7.4-7.4a1.44 1.44 0 0 1 .48-1.291l.9-.8a1 1 0 0 1 1.268-.072 7.5 7.5 0 0 1 1.755 1.976 1 1 0 0 1-.238 1.31l-.465.355a1 1 0 0 0-.303 1.213z"/></svg>Llamar al dueño</button>
+          </div>
+        </div>
+
+        <div class="card elev-sm" style="gap:var(--space-2)">
+          <div class="card-kicker">Última ubicación conocida</div>
+          <div style="position:relative;height:120px;border-radius:var(--radius-md);overflow:hidden;background:linear-gradient(135deg,var(--color-accent-2-200),var(--color-neutral-200))">
+            <div style="position:absolute;inset:0;opacity:0.5;background-image:radial-gradient(var(--color-accent-2-500) 1px, transparent 1px);background-size:14px 14px"></div>
+            <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-100%)">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="var(--color-accent-700)" stroke="var(--color-accent-100)" stroke-width="1.5"><path d="M12 22s7-7.58 7-12.5A7 7 0 0 0 5 9.5C5 14.42 12 22 12 22z"/><circle cx="12" cy="9.5" r="2.5" fill="var(--color-accent-100)"/></svg>
+            </div>
+          </div>
+          <p class="card-body" style="font-size:12px">Hoy, 09:42 · Av. Corrientes 1500</p>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isScreen1 }}" hint-placeholder-val="{{ false }}">
+      <div style="height:100%;background:var(--color-bg);padding:40px 24px;display:flex;flex-direction:column;gap:var(--space-4)">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:8px">
+          <div style="width:56px;height:56px;border-radius:50%;background:var(--color-accent-100);display:flex;align-items:center;justify-content:center">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#8c491a" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/><path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z"/></svg>
+          </div>
+          <h2 style="margin:0;font-size:22px;text-align:center">Bienvenido a Huellitas</h2>
+          <p style="margin:0;text-align:center;font-size:13px;opacity:0.7">Configurá tu tag en menos de 2 minutos</p>
+        </div>
+        <div class="field"><label for="hu-email">Email</label><input class="input" id="hu-email" placeholder="tu@email.com"></div>
+        <div class="field"><label for="hu-pass">Contraseña</label><input class="input" id="hu-pass" type="password" placeholder="••••••••"></div>
+        <button type="button" class="btn btn-primary btn-block">Iniciar sesión</button>
+        <div style="display:flex;align-items:center;gap:10px;margin:4px 0"><div style="flex:1;height:1px;background:var(--color-divider)"></div><span style="font-size:11px;opacity:0.55">o continuá con</span><div style="flex:1;height:1px;background:var(--color-divider)"></div></div>
+        <button type="button" class="btn btn-secondary btn-block">Continuar con Google</button>
+        <button type="button" class="btn btn-ghost" style="margin:6px auto 0">¿No tenés cuenta? Registrate</button>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isScreen2 }}" hint-placeholder-val="{{ false }}">
+      <div class="hu-scroll" style="height:100%;overflow-y:auto;background:var(--color-bg);padding:24px 18px 32px;display:flex;flex-direction:column;gap:var(--space-3)">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <h2 style="margin:0;font-size:22px">Mis Tags</h2>
+          <button type="button" class="btn btn-primary btn-icon" aria-label="Nuevo tag"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
+        </div>
+        <sc-for list="{{ tags }}" as="t" hint-placeholder-count="3">
+          <div class="card elev-sm" style="flex-direction:row;align-items:center;gap:12px">
+            <div style="width:48px;height:48px;border-radius:50%;background:var(--color-neutral-200);flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-700)" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="{{ t.iconPath }}"/></svg>
+            </div>
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+              <div class="card-title" style="font-size:15px">{{ t.name }}</div>
+              <span class="tag {{ t.tagClass }}" style="align-self:flex-start">{{ t.type }}</span>
+            </div>
+            <button type="button" onClick="{{ t.onToggle }}" aria-label="Activar o desactivar" style="{{ t.switchTrackStyle }}">
+              <span style="{{ t.switchKnobStyle }}"></span>
+            </button>
+          </div>
+        </sc-for>
+        <button type="button" class="btn btn-secondary btn-block" style="margin-top:6px">+ Nuevo tag</button>
+        <p style="text-align:center;font-size:11px;opacity:0.55;margin:2px 0 0">Tocá un tag para editarlo</p>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isScreen3 }}" hint-placeholder-val="{{ false }}">
+      <div class="hu-scroll" style="height:100%;overflow-y:auto;background:var(--color-bg);padding:24px 18px 36px;display:flex;flex-direction:column;gap:var(--space-3)">
+        <div style="display:flex;align-items:center;gap:10px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+          <h2 style="margin:0;font-size:19px">Nuevo tag</h2>
+        </div>
+
+        <div class="field"><label>Tipo de tag</label>
+          <div class="seg" style="width:100%">
+            <label class="seg-opt" style="flex:1;justify-content:center"><input type="radio" name="tagtype" checked="{{ isMascota }}" onChange="{{ setTypeMascota }}"/><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/><path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z"/></svg>Mascota</label>
+            <label class="seg-opt" style="flex:1;justify-content:center"><input type="radio" name="tagtype" checked="{{ isObjeto }}" onChange="{{ setTypeObjeto }}"/><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8V6a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2m-14 0h16l-1.4 11.2A2 2 0 0 1 16.6 21H7.4a2 2 0 0 1-2-1.8L4 8Z"/></svg>Objeto</label>
+          </div>
+        </div>
+
+        <sc-if value="{{ isMascota }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:var(--space-3)">
+            <div style="display:flex;justify-content:center">
+              <image-slot id="new-pet-photo" shape="circle" placeholder="Subir foto" style="width:96px;height:96px"></image-slot>
+            </div>
+            <div class="field"><label>Especie</label>
+              <div class="seg" style="width:100%">
+                <label class="seg-opt" style="flex:1;justify-content:center"><input type="radio" name="species" checked="{{ isPerro }}" onChange="{{ setPerro }}"/>Perro</label>
+                <label class="seg-opt" style="flex:1;justify-content:center"><input type="radio" name="species" checked="{{ isGato }}" onChange="{{ setGato }}"/>Gato</label>
+              </div>
+            </div>
+            <div class="field"><label for="pf-name">Nombre de la mascota</label><input class="input" id="pf-name" value="Rocco"></div>
+            <div class="field"><label for="pf-age">Edad</label><input class="input" id="pf-age" value="3 años"></div>
+            <div class="field"><label for="pf-health">Condiciones de salud / alergias</label><textarea class="input" id="pf-health" rows="2">Alergia leve al polen.</textarea></div>
+            <div class="field"><label for="pf-owner">Nombre del dueño</label><input class="input" id="pf-owner" value="María López"></div>
+            <div class="field"><label for="pf-phone">Teléfono de contacto</label><input class="input" id="pf-phone" placeholder="+54 9 11 ..."></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 4px">
+              <span style="font-size:13px">Tag activo</span>
+              <button type="button" onClick="{{ toggleEditActive }}" style="{{ editSwitchTrackStyle }}"><span style="{{ editSwitchKnobStyle }}"></span></button>
+            </div>
+            <button type="button" class="btn btn-primary btn-block">Guardar cambios</button>
+          </div>
+        </sc-if>
+        <sc-if value="{{ isObjeto }}" hint-placeholder-val="{{ false }}">
+          <div class="card elev-sm" style="align-items:center;text-align:center;gap:6px;padding:var(--space-6) var(--space-3)">
+            <div class="card-kicker">Próximamente</div>
+            <p class="card-body">Los campos para objetos (contacto, recompensa, descripción) usan la misma estructura modular — se habilitan sin rediseñar la app.</p>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isScreen4 }}" hint-placeholder-val="{{ false }}">
+      <div style="height:100%;background:var(--color-bg);padding:32px 22px;display:flex;flex-direction:column">
+        <div style="display:flex;gap:6px;justify-content:center;margin-bottom:24px">
+          <sc-for list="{{ obDots }}" as="d" hint-placeholder-count="4">
+            <span style="{{ d.style }}"></span>
+          </sc-for>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px">
+          <sc-if value="{{ isOb1 }}" hint-placeholder-val="{{ true }}">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#8c491a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM17.5 17.5H21V21h-3.5z"/></svg>
+            <h2 style="margin:0;font-size:20px">Escaneá el QR de tu llavero</h2>
+            <p style="margin:0;font-size:13px;opacity:0.7;max-width:26ch">Usá la cámara de tu teléfono para leer el código único del tag físico.</p>
+          </sc-if>
+          <sc-if value="{{ isOb2 }}" hint-placeholder-val="{{ false }}">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#8c491a" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <h2 style="margin:0;font-size:20px">Creá tu cuenta</h2>
+            <p style="margin:0;font-size:13px;opacity:0.7;max-width:26ch">Solo necesitamos tu email y una contraseña.</p>
+          </sc-if>
+          <sc-if value="{{ isOb3 }}" hint-placeholder-val="{{ false }}">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#8c491a" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/><path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z"/></svg>
+            <h2 style="margin:0;font-size:20px">Completá el perfil</h2>
+            <p style="margin:0;font-size:13px;opacity:0.7;max-width:26ch">Foto, nombre y los datos clave de tu mascota u objeto.</p>
+          </sc-if>
+          <sc-if value="{{ isOb4 }}" hint-placeholder-val="{{ false }}">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#7a8a5e" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+            <h2 style="margin:0;font-size:20px">¡Listo!</h2>
+            <p style="margin:0;font-size:13px;opacity:0.7;max-width:26ch">Tu tag ya está activo y funcionando.</p>
+          </sc-if>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:16px">
+          <button type="button" class="btn btn-ghost" style="{{ obBackVisibility }}" onClick="{{ obBack }}">Atrás</button>
+          <button type="button" class="btn btn-primary btn-block" onClick="{{ obNext }}">{{ obNextLabel }}</button>
+        </div>
+      </div>
+    </sc-if>
+
+  </x-import>
+  </sc-if>
+
+  <sc-if value="{{ isDesktopView }}" hint-placeholder-val="{{ false }}">
+  <x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" width="{{ 1180 }}" height="{{ 720 }}" url="huellitas.app/{{ activeSlug }}" hint-size="1180,720">
+    <div style="display:flex;height:100%;background:var(--color-bg);font-family:var(--font-body)">
+      <aside style="width:210px;flex:none;background:var(--color-surface);padding:22px 14px;display:flex;flex-direction:column;gap:4px;border-right:1px solid var(--color-divider)">
+        <div style="display:flex;align-items:center;gap:8px;padding:0 8px 18px">
+          <div style="width:30px;height:30px;border-radius:50%;background:var(--color-accent-100);display:flex;align-items:center;justify-content:center;flex:none">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8c491a" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="20" cy="16" r="2"/><path d="M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z"/></svg>
+          </div>
+          <span style="font-family:var(--font-heading);font-size:16px">Huellitas</span>
+        </div>
+        <sc-for list="{{ screens }}" as="scr" hint-placeholder-count="5">
+          <button type="button" onClick="{{ scr.onClick }}" style="{{ scr.sidebarStyle }}">{{ scr.label }}</button>
+        </sc-for>
+      </aside>
+
+      <main class="hu-scroll" style="flex:1;overflow-y:auto;padding:36px 44px">
+
+        <sc-if value="{{ isScreen0 }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;gap:36px;max-width:920px;align-items:flex-start">
+            <div style="width:240px;flex:none;display:flex;flex-direction:column;align-items:center;gap:10px">
+              <div class="washed" style="width:180px;height:180px;border-radius:50%;overflow:hidden;box-shadow:var(--shadow-md)">
+                <image-slot id="pet-avatar-desktop" shape="circle" placeholder="Foto de Rocco" style="width:100%;height:100%"></image-slot>
+              </div>
+              <h2 style="margin:6px 0 0;font-size:26px">Rocco</h2>
+              <div style="display:flex;gap:6px"><span class="tag tag-accent">Perro · Labrador</span><span class="tag tag-accent-2">{{ profileStatusLabel }}</span></div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:var(--space-4)">
+              <div class="card elev-sm">
+                <div class="card-kicker">Salud</div>
+                <div style="display:flex;gap:24px;font-size:13px">
+                  <div style="display:flex;align-items:center;gap:8px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8c491a" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Alergia leve al polen</div>
+                  <div style="display:flex;align-items:center;gap:8px"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8c491a" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Vacunas al día</div>
+                </div>
+              </div>
+              <div class="card elev-sm">
+                <div class="card-kicker">Contacto del dueño</div>
+                <div class="card-title" style="font-size:16px">María López</div>
+                <div style="display:flex;gap:10px;margin-top:4px">
+                  <button type="button" class="btn btn-primary"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21l1.65-4.95A9 9 0 1 1 8 19.5z"/></svg>Escribir por WhatsApp</button>
+                  <button type="button" class="btn btn-secondary"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465a1 1 0 0 1 1.31-.238 7.5 7.5 0 0 1 1.976 1.755 1 1 0 0 1-.072 1.268l-.8.9a1.44 1.44 0 0 1-1.291.48c-3.65-.5-6.9-3.75-7.4-7.4a1.44 1.44 0 0 1 .48-1.291l.9-.8a1 1 0 0 1 1.268-.072 7.5 7.5 0 0 1 1.755 1.976 1 1 0 0 1-.238 1.31l-.465.355a1 1 0 0 0-.303 1.213z"/></svg>Llamar</button>
+                </div>
+              </div>
+              <div class="card elev-sm">
+                <div class="card-kicker">Última ubicación conocida</div>
+                <div style="position:relative;height:150px;border-radius:var(--radius-md);overflow:hidden;background:linear-gradient(135deg,var(--color-accent-2-200),var(--color-neutral-200))">
+                  <div style="position:absolute;inset:0;opacity:0.5;background-image:radial-gradient(var(--color-accent-2-500) 1px, transparent 1px);background-size:14px 14px"></div>
+                  <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-100%)">
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="var(--color-accent-700)" stroke="var(--color-accent-100)" stroke-width="1.5"><path d="M12 22s7-7.58 7-12.5A7 7 0 0 0 5 9.5C5 14.42 12 22 12 22z"/><circle cx="12" cy="9.5" r="2.5" fill="var(--color-accent-100)"/></svg>
+                  </div>
+                </div>
+                <p class="card-body" style="font-size:12px">Hoy, 09:42 · Av. Corrientes 1500</p>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isScreen1 }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:380px;margin:20px auto;display:flex;flex-direction:column;gap:var(--space-4)">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+              <h2 style="margin:0;font-size:24px">Bienvenido a Huellitas</h2>
+              <p style="margin:0;text-align:center;font-size:13px;opacity:0.7">Configurá tu tag en menos de 2 minutos</p>
+            </div>
+            <div class="field"><label for="hu-email-d">Email</label><input class="input" id="hu-email-d" placeholder="tu@email.com"></div>
+            <div class="field"><label for="hu-pass-d">Contraseña</label><input class="input" id="hu-pass-d" type="password" placeholder="••••••••"></div>
+            <button type="button" class="btn btn-primary btn-block">Iniciar sesión</button>
+            <button type="button" class="btn btn-secondary btn-block">Continuar con Google</button>
+            <button type="button" class="btn btn-ghost" style="margin:2px auto 0">¿No tenés cuenta? Registrate</button>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isScreen2 }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:var(--space-4);max-width:920px">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <h2 style="margin:0;font-size:24px">Mis Tags</h2>
+              <button type="button" class="btn btn-primary"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Nuevo tag</button>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-4)">
+              <sc-for list="{{ tags }}" as="t" hint-placeholder-count="3">
+                <div class="card elev-sm" style="align-items:center;text-align:center;gap:10px">
+                  <div style="width:56px;height:56px;border-radius:50%;background:var(--color-neutral-200);display:flex;align-items:center;justify-content:center">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-700)" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="{{ t.iconPath }}"/></svg>
+                  </div>
+                  <div class="card-title" style="font-size:15px">{{ t.name }}</div>
+                  <span class="tag {{ t.tagClass }}">{{ t.type }}</span>
+                  <button type="button" onClick="{{ t.onToggle }}" aria-label="Activar o desactivar" style="{{ t.switchTrackStyle }}"><span style="{{ t.switchKnobStyle }}"></span></button>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isScreen3 }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;gap:36px;max-width:920px">
+            <div style="width:260px;flex:none;display:flex;flex-direction:column;gap:var(--space-3)">
+              <div style="display:flex;justify-content:center">
+                <image-slot id="new-pet-photo-desktop" shape="circle" placeholder="Subir foto" style="width:120px;height:120px"></image-slot>
+              </div>
+              <div class="field"><label>Tipo de tag</label>
+                <div class="seg" style="width:100%">
+                  <label class="seg-opt" style="flex:1;justify-content:center"><input type="radio" name="tagtype-d" checked="{{ isMascota }}" onChange="{{ setTypeMascota }}"/>Mascota</label>
+                  <label class="seg-opt" style="flex:1;justify-content:center"><input type="radio" name="tagtype-d" checked="{{ isObjeto }}" onChange="{{ setTypeObjeto }}"/>Objeto</label>
+                </div>
+              </div>
+              <sc-if value="{{ isMascota }}" hint-placeholder-val="{{ true }}">
+                <div class="field"><label>Especie</label>
+                  <div class="seg" style="width:100%">
+                    <label class="seg-opt" style="flex:1;justify-content:center"><input type="radio" name="species-d" checked="{{ isPerro }}" onChange="{{ setPerro }}"/>Perro</label>
+                    <label class="seg-opt" style="flex:1;justify-content:center"><input type="radio" name="species-d" checked="{{ isGato }}" onChange="{{ setGato }}"/>Gato</label>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+            <sc-if value="{{ isMascota }}" hint-placeholder-val="{{ true }}">
+              <div style="flex:1;display:flex;flex-direction:column;gap:var(--space-3)">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3)">
+                  <div class="field"><label for="pf-name-d">Nombre de la mascota</label><input class="input" id="pf-name-d" value="Rocco"></div>
+                  <div class="field"><label for="pf-age-d">Edad</label><input class="input" id="pf-age-d" value="3 años"></div>
+                </div>
+                <div class="field"><label for="pf-health-d">Condiciones de salud / alergias</label><textarea class="input" id="pf-health-d" rows="2">Alergia leve al polen.</textarea></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3)">
+                  <div class="field"><label for="pf-owner-d">Nombre del dueño</label><input class="input" id="pf-owner-d" value="María López"></div>
+                  <div class="field"><label for="pf-phone-d">Teléfono de contacto</label><input class="input" id="pf-phone-d" placeholder="+54 9 11 ..."></div>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 4px">
+                  <span style="font-size:13px">Tag activo</span>
+                  <button type="button" onClick="{{ toggleEditActive }}" style="{{ editSwitchTrackStyle }}"><span style="{{ editSwitchKnobStyle }}"></span></button>
+                </div>
+                <button type="button" class="btn btn-primary" style="align-self:flex-start">Guardar cambios</button>
+              </div>
+            </sc-if>
+            <sc-if value="{{ isObjeto }}" hint-placeholder-val="{{ false }}">
+              <div class="card elev-sm" style="flex:1;align-items:center;justify-content:center;text-align:center;gap:6px">
+                <div class="card-kicker">Próximamente</div>
+                <p class="card-body">Los campos para objetos (contacto, recompensa, descripción) usan la misma estructura modular — se habilitan sin rediseñar la app.</p>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isScreen4 }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:440px;margin:20px auto;display:flex;flex-direction:column;align-items:center;text-align:center;gap:16px">
+            <div style="display:flex;gap:6px">
+              <sc-for list="{{ obDots }}" as="d" hint-placeholder-count="4">
+                <span style="{{ d.style }}"></span>
+              </sc-for>
+            </div>
+            <sc-if value="{{ isOb1 }}" hint-placeholder-val="{{ true }}"><h2 style="margin:0;font-size:20px">Escaneá el QR de tu llavero</h2><p style="margin:0;font-size:13px;opacity:0.7">Usá la cámara de tu teléfono para leer el código único del tag físico.</p></sc-if>
+            <sc-if value="{{ isOb2 }}" hint-placeholder-val="{{ false }}"><h2 style="margin:0;font-size:20px">Creá tu cuenta</h2><p style="margin:0;font-size:13px;opacity:0.7">Solo necesitamos tu email y una contraseña.</p></sc-if>
+            <sc-if value="{{ isOb3 }}" hint-placeholder-val="{{ false }}"><h2 style="margin:0;font-size:20px">Completá el perfil</h2><p style="margin:0;font-size:13px;opacity:0.7">Foto, nombre y los datos clave de tu mascota u objeto.</p></sc-if>
+            <sc-if value="{{ isOb4 }}" hint-placeholder-val="{{ false }}"><h2 style="margin:0;font-size:20px">¡Listo!</h2><p style="margin:0;font-size:13px;opacity:0.7">Tu tag ya está activo y funcionando.</p></sc-if>
+            <div style="display:flex;gap:10px;margin-top:8px">
+              <button type="button" class="btn btn-ghost" style="{{ obBackVisibility }}" onClick="{{ obBack }}">Atrás</button>
+              <button type="button" class="btn btn-primary" onClick="{{ obNext }}">{{ obNextLabel }}</button>
+            </div>
+          </div>
+        </sc-if>
+
+      </main>
+    </div>
+  </x-import>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    screen: 0,
+    viewMode: 'mobile',
+    profileActive: true,
+    editActive: true,
+    tagType: 'mascota',
+    species: 'perro',
+    obStep: 1,
+    tags: [
+      { id: 1, name: 'Rocco', type: 'Perro', active: true, icon: 'dog' },
+      { id: 2, name: 'Michi', type: 'Gato', active: true, icon: 'cat' },
+      { id: 3, name: 'Mochila escolar', type: 'Objeto', active: false, icon: 'bag' },
+    ],
+  };
+
+  iconPath(kind) {
+    if (kind === 'cat') return 'M12 5c.67 0 1.35.09 2 .26 1.78-2 5.03-2.84 6.42-2.26 1.4.58-.42 7-.42 7 .57 1.07 1 2.24 1 3.44C21 17.9 16.97 21 12 21s-9-3-9-7.56c0-1.25.5-2.4 1-3.44 0 0-1.89-6.42-.42-7 1.47-.58 4.64.26 6.42 2.26A9.8 9.8 0 0 1 12 5Z';
+    if (kind === 'bag') return 'M6 8V6a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2m-14 0h16l-1.4 11.2A2 2 0 0 1 16.6 21H7.4a2 2 0 0 1-2-1.8L4 8Z';
+    return 'M9 10a5 5 0 0 1 5 5v3.5a3.5 3.5 0 0 1-6.84 1.045Q6.52 17.48 4.46 16.84A3.5 3.5 0 0 1 5.5 10Z';
+  }
+
+  switchStyle(active) {
+    return `width:44px;height:26px;border-radius:999px;border:none;padding:2px;cursor:pointer;display:flex;align-items:center;flex:none;background:${active ? 'var(--color-accent)' : 'var(--color-neutral-300)'};transition:background .15s`;
+  }
+  knobStyle(active) {
+    return `width:20px;height:20px;border-radius:50%;background:#fff;display:block;box-shadow:var(--shadow-sm);transform:translateX(${active ? '18px' : '0px'});transition:transform .15s`;
+  }
+
+  renderVals() {
+    const s = this.state;
+    const screenDefs = ['Perfil (QR)', 'Login', 'Dashboard', 'Crear tag', 'Onboarding'];
+    const slugs = ['p/rocco', 'login', 'app/tags', 'app/tags/nuevo', 'activar'];
+    const screens = screenDefs.map((label, i) => ({
+      label,
+      onClick: () => this.setState({ screen: i }),
+      btnStyle: `font-family:var(--font-body);font-size:12.5px;padding:8px 14px;border-radius:999px;border:1px solid var(--color-divider);cursor:pointer;background:${s.screen === i ? 'var(--color-accent)' : 'var(--color-surface)'};color:${s.screen === i ? 'var(--color-bg)' : 'var(--color-text)'}`,
+      sidebarStyle: `font-family:var(--font-body);font-size:13.5px;text-align:left;padding:9px 12px;border-radius:var(--radius-md);border:none;cursor:pointer;background:${s.screen === i ? 'var(--color-accent-100)' : 'transparent'};color:${s.screen === i ? 'var(--color-accent-800)' : 'var(--color-text)'}`,
+    }));
+
+    const tags = s.tags.map(t => ({
+      ...t,
+      tagClass: t.type === 'Perro' || t.type === 'Gato' ? 'tag-accent' : 'tag-accent-2',
+      iconPath: this.iconPath(t.icon),
+      switchTrackStyle: this.switchStyle(t.active),
+      switchKnobStyle: this.knobStyle(t.active),
+      onToggle: () => this.setState({ tags: s.tags.map(x => x.id === t.id ? { ...x, active: !x.active } : x) }),
+    }));
+
+    const obDots = [1, 2, 3, 4].map(n => ({
+      style: `width:${s.obStep === n ? '22px' : '8px'};height:8px;border-radius:999px;background:${s.obStep >= n ? 'var(--color-accent)' : 'var(--color-neutral-300)'};transition:all .15s`,
+    }));
+
+    return {
+      screens,
+      activeTitle: screenDefs[s.screen],
+      activeSlug: slugs[s.screen],
+      isMobileView: s.viewMode === 'mobile',
+      isDesktopView: s.viewMode === 'desktop',
+      setMobileView: () => this.setState({ viewMode: 'mobile' }),
+      setDesktopView: () => this.setState({ viewMode: 'desktop' }),
+      isScreen0: s.screen === 0, isScreen1: s.screen === 1, isScreen2: s.screen === 2, isScreen3: s.screen === 3, isScreen4: s.screen === 4,
+      profileStatusLabel: s.profileActive ? 'Activo' : 'Inactivo',
+      tags,
+      isMascota: s.tagType === 'mascota',
+      isObjeto: s.tagType === 'objeto',
+      setTypeMascota: () => this.setState({ tagType: 'mascota' }),
+      setTypeObjeto: () => this.setState({ tagType: 'objeto' }),
+      isPerro: s.species === 'perro',
+      isGato: s.species === 'gato',
+      setPerro: () => this.setState({ species: 'perro' }),
+      setGato: () => this.setState({ species: 'gato' }),
+      editSwitchTrackStyle: this.switchStyle(s.editActive),
+      editSwitchKnobStyle: this.knobStyle(s.editActive),
+      toggleEditActive: () => this.setState({ editActive: !s.editActive }),
+      obDots,
+      isOb1: s.obStep === 1, isOb2: s.obStep === 2, isOb3: s.obStep === 3, isOb4: s.obStep === 4,
+      obNextLabel: s.obStep === 4 ? 'Ir a mi dashboard' : 'Siguiente',
+      obBackVisibility: s.obStep === 1 ? 'visibility:hidden' : 'visibility:visible',
+      obNext: () => this.setState({ obStep: s.obStep === 4 ? 4 : s.obStep + 1, screen: s.obStep === 4 ? 2 : s.screen }),
+      obBack: () => this.setState({ obStep: Math.max(1, s.obStep - 1) }),
+    };
+  }
+}
+
+</script>
+</body>
+</html>
