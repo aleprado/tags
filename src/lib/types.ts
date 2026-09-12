@@ -24,7 +24,9 @@ export interface TagDoc {
   ownerName?: string
   ownerPhone?: string
   photoUrl?: string
-  // objeto fields (v2)
+  homeLocation?: { lat: number; lng: number }
+  // objeto fields
+  objectCategory?: 'mochila' | 'cartera' | 'llaves' | 'indumentaria' | 'otro'
   objectDescription?: string
   rewardAmount?: number
   contactPhone?: string

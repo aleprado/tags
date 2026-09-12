@@ -26,6 +26,40 @@ async function assertAdmin(uid: string) {
   }
 }
 
+// ─── QR SVG builder (rounded dots + paw overlay) ────────────────────────────
+
+function buildQRSvg(QRCode: typeof import('qrcode'), url: string): string {
+  const qr = QRCode.create(url, { errorCorrectionLevel: 'H' })
+  const sz = qr.modules.size
+  const margin = 2
+  const total = sz + margin * 2
+  const bg = '#f5ead8'
+  const fg = '#201e1d'
+  const f = (n: number) => n.toFixed(3)
+
+  let dots = ''
+  for (let row = 0; row < sz; row++) {
+    for (let col = 0; col < sz; col++) {
+      if (!qr.modules.get(row, col)) continue
+      dots += `<rect x="${f(col + margin + 0.07)}" y="${f(row + margin + 0.07)}" width=".86" height=".86" rx=".35" ry=".35" fill="${fg}"/>`
+    }
+  }
+
+  const c = total / 2
+  const paw = [
+    `<circle cx="${f(c)}" cy="${f(c)}" r="${f(total * 0.135)}" fill="${bg}"/>`,
+    `<ellipse cx="${f(c)}" cy="${f(c + total * 0.025)}" rx="${f(total * 0.078)}" ry="${f(total * 0.058)}" fill="${fg}"/>`,
+    `<circle cx="${f(c - total * 0.085)}" cy="${f(c - total * 0.037)}" r="${f(total * 0.030)}" fill="${fg}"/>`,
+    `<circle cx="${f(c - total * 0.027)}" cy="${f(c - total * 0.060)}" r="${f(total * 0.030)}" fill="${fg}"/>`,
+    `<circle cx="${f(c + total * 0.027)}" cy="${f(c - total * 0.060)}" r="${f(total * 0.030)}" fill="${fg}"/>`,
+    `<circle cx="${f(c + total * 0.085)}" cy="${f(c - total * 0.037)}" r="${f(total * 0.030)}" fill="${fg}"/>`,
+  ].join('')
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} ${total}">` +
+    `<rect width="${total}" height="${total}" fill="${bg}" rx="1.5" ry="1.5"/>` +
+    dots + paw + `</svg>`
+}
+
 // ─── generateQRBatch ────────────────────────────────────────────────────────
 
 export const generateQRBatch = onCall({ maxInstances: 1, cors: ALLOWED_ORIGINS }, async (request) => {
@@ -53,14 +87,12 @@ export const generateQRBatch = onCall({ maxInstances: 1, cors: ALLOWED_ORIGINS }
     })
 
     uploads.push(
-      (QRCode.toBuffer as (text: string, opts: object) => Promise<Buffer>)(`${appUrl}/p/${code}`, {
-        type: 'png', width: 512, margin: 2,
-        color: { dark: '#201e1d', light: '#f5ead8' },
-      }).then(buf => {
-        const file = bucket.file(`qr/${code}.png`)
-        return file.save(buf, { contentType: 'image/png', public: true })
-          .then(() => file.publicUrl())
-      })
+      (async () => {
+        const svgStr = buildQRSvg(QRCode, `${appUrl}/p/${code}`)
+        const file = bucket.file(`qr/${code}.svg`)
+        await file.save(Buffer.from(svgStr, 'utf8'), { contentType: 'image/svg+xml', public: true })
+        return file.publicUrl()
+      })()
     )
   }
 
@@ -146,6 +178,39 @@ export const mpWebhook = onRequest({}, (req, res) => {
 
     res.status(200).send('ok')
   })
+})
+
+// ─── deleteTag ──────────────────────────────────────────────────────────────
+
+export const deleteTag = onCall({ maxInstances: 10, cors: ALLOWED_ORIGINS }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'No autenticado')
+
+  const { tagId } = request.data as { tagId: string }
+  if (!tagId) throw new HttpsError('invalid-argument', 'tagId es requerido')
+
+  const db = getFirestore()
+  const tagRef = db.collection('tags').doc(tagId)
+  const tagSnap = await tagRef.get()
+
+  if (!tagSnap.exists) throw new HttpsError('not-found', 'Tag no encontrado')
+  if (tagSnap.data()?.ownerUid !== request.auth.uid) {
+    throw new HttpsError('permission-denied', 'No tenés permiso para eliminar este tag')
+  }
+
+  const code: string | undefined = tagSnap.data()?.code
+  const batch = db.batch()
+  batch.delete(tagRef)
+
+  if (code) {
+    batch.update(db.collection('codes').doc(code), {
+      status: 'sin_vender',
+      tagId: FieldValue.delete(),
+      claimedAt: FieldValue.delete(),
+    })
+  }
+
+  await batch.commit()
+  return { success: true }
 })
 
 // ─── claimCode ──────────────────────────────────────────────────────────────

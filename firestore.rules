@@ -15,6 +15,14 @@ service cloud.firestore {
         && request.resource.data.ownerUid == request.auth.uid;
       allow update, delete: if request.auth != null
         && resource.data.ownerUid == request.auth.uid;
+
+      // Scans: cualquiera puede crear (quien encuentra al perro), solo el dueño puede leer
+      match /scans/{scanId} {
+        allow create: if true;
+        allow read: if request.auth != null
+          && get(/databases/$(database)/documents/tags/$(tagId)).data.ownerUid == request.auth.uid;
+        allow update, delete: if false;
+      }
     }
 
     // Codes: lectura pública; admins pueden actualizar (marcar vendido);

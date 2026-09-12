@@ -1,37 +1,90 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getTag, getCode } from '../lib/firestore'
+import { getTag, getCode, saveScan } from '../lib/firestore'
 import { useAuth } from '../context/AuthContext'
 import type { TagDoc } from '../lib/types'
+import LoadingPaw from '../components/LoadingPaw'
 
-function MapPlaceholder() {
+const OBJECT_CATEGORIES: Record<string, { label: string; icon: string }> = {
+  mochila: { label: 'Mochila', icon: '🎒' },
+  cartera: { label: 'Cartera', icon: '👜' },
+  llaves: { label: 'Llaves', icon: '🔑' },
+  indumentaria: { label: 'Indumentaria', icon: '👕' },
+  otro: { label: 'Objeto', icon: '📦' },
+}
+
+function categoryInfo(cat?: string) {
+  return OBJECT_CATEGORIES[cat ?? ''] ?? OBJECT_CATEGORIES.otro
+}
+
+function MapView({ lat, lng }: { lat: number; lng: number }) {
+  const src = `https://maps.google.com/maps?q=${lat},${lng}&z=16&hl=es&output=embed`
   return (
-    <div style={{ position: 'relative', height: 130, borderRadius: 'var(--radius-md)', overflow: 'hidden', background: 'linear-gradient(135deg,var(--color-accent-2-200),var(--color-neutral-200))' }}>
-      <div style={{ position: 'absolute', inset: 0, opacity: 0.5, backgroundImage: 'radial-gradient(var(--color-accent-2-500) 1px, transparent 1px)', backgroundSize: '14px 14px' }} />
-      <div style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -100%)' }}>
-        <svg width="30" height="30" viewBox="0 0 24 24" fill="var(--color-accent-700)" stroke="var(--color-accent-100)" strokeWidth="1.5">
-          <path d="M12 22s7-7.58 7-12.5A7 7 0 0 0 5 9.5C5 14.42 12 22 12 22z"/>
-          <circle cx="12" cy="9.5" r="2.5" fill="var(--color-accent-100)"/>
-        </svg>
-      </div>
+    <div style={{ position: 'relative', height: 160, borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+      <iframe
+        src={src}
+        style={{ width: '100%', height: '100%', border: 0 }}
+        title="Mapa"
+        loading="lazy"
+        allowFullScreen
+        referrerPolicy="no-referrer-when-downgrade"
+      />
     </div>
   )
 }
 
 function PhoneIcon() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465a1 1 0 0 1 1.31-.238 7.5 7.5 0 0 1 1.976 1.755 1 1 0 0 1-.072 1.268l-.8.9a1.44 1.44 0 0 1-1.291.48c-3.65-.5-6.9-3.75-7.4-7.4a1.44 1.44 0 0 1 .48-1.291l.9-.8a1 1 0 0 1 1.268-.072 7.5 7.5 0 0 1 1.755 1.976 1 1 0 0 1-.238 1.31l-.465.355a1 1 0 0 0-.303 1.213z"/>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02L6.6 10.8z" />
     </svg>
   )
 }
 
 function WhatsAppIcon() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.75" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 21l1.65-4.95A9 9 0 1 1 8 19.5z"/>
-      <path d="M9 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0zm5 0a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0zm-8.5 3.5c1 2 3 3.5 6.5 3.5"/>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z" />
     </svg>
+  )
+}
+
+function HuellitasHeader() {
+  return (
+    <header style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '10px 20px', background: 'var(--color-surface)',
+      borderBottom: '1px solid var(--color-divider)',
+    }}>
+      <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: 'var(--color-text)' }}>
+        <img src="/paw.svg" alt="" style={{ width: 28, height: 28 }} />
+        <span style={{ fontFamily: 'var(--font-heading)', fontSize: 18, letterSpacing: '-0.01em' }}>
+          Huellitas
+        </span>
+      </a>
+      <a
+        href="/activar"
+        className="btn btn-primary"
+        style={{ fontSize: 12, padding: '6px 14px', textDecoration: 'none' }}
+      >
+        Consegui el tuyo
+      </a>
+    </header>
+  )
+}
+
+function HuellitasFooter() {
+  return (
+    <footer style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+      padding: '24px 20px 20px', opacity: 0.45, fontSize: 11,
+    }}>
+      <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 5, textDecoration: 'none', color: 'var(--color-text)' }}>
+        <img src="/paw.svg" alt="" style={{ width: 14, height: 14 }} />
+        <span style={{ fontFamily: 'var(--font-heading)', fontSize: 12 }}>Huellitas</span>
+      </a>
+      <span>hecho con amor por Delfi</span>
+    </footer>
   )
 }
 
@@ -42,73 +95,130 @@ export default function PublicProfile() {
   const [tag, setTag] = useState<(TagDoc & { id: string }) | null>(null)
   const [status, setStatus] = useState<'loading' | 'found' | 'not_found' | 'not_activated'>('loading')
   const [codeParam, setCodeParam] = useState<string>('')
+  const [foundAt, setFoundAt] = useState<{ lat: number; lng: number } | null>(null)
+  const [locationBusy, setLocationBusy] = useState(false)
+  const [showLocationModal, setShowLocationModal] = useState(false)
 
-  useEffect(() => {
-    if (!param) return
-    // The QR URL encodes the code ID (e.g. HU-xxx). Look it up in codes first.
-    getCode(param).then(async codeDoc => {
-      if (codeDoc) {
-        if (codeDoc.tagId) {
-          const tagData = await getTag(codeDoc.tagId)
-          if (tagData) { setTag(tagData); setStatus('found') }
-          else setStatus('not_found')
-        } else {
-          setCodeParam(param)
-          setStatus('not_activated')
-        }
-      } else {
-        // Fallback: try as direct tag document ID
-        const tagData = await getTag(param)
-        if (tagData) { setTag(tagData); setStatus('found') }
-        else setStatus('not_found')
-      }
-    })
-  }, [param])
+  function handleWhatsApp() {
+    const phone = tag?.type === 'objeto' ? (tag?.contactPhone ?? tag?.ownerPhone) : tag?.ownerPhone
+    if (!phone || locationBusy) return
+    if (navigator.geolocation) {
+      setShowLocationModal(true)
+    } else {
+      sendWhatsApp(false)
+    }
+  }
 
-  if (status === 'loading') {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-        <span style={{ fontFamily: 'var(--font-heading)', color: 'var(--color-accent)', fontSize: 18 }}>Cargando…</span>
-      </div>
+  function sendWhatsApp(withLocation: boolean) {
+    setShowLocationModal(false)
+    const phone = tag?.type === 'objeto' ? (tag?.contactPhone ?? tag?.ownerPhone) : tag?.ownerPhone
+    if (!phone) return
+
+    const base = tag?.type === 'objeto'
+      ? `Hola, encontre tu ${categoryInfo(tag?.objectCategory).label.toLowerCase()}`
+      : `Hola, encontre a ${tag?.petName ?? 'tu mascota'}`
+
+    const wa = (extra = '') => {
+      const msg = extra ? `${base}\n\n${extra}` : base
+      window.location.href = `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`
+    }
+
+    if (!withLocation) { wa(); return }
+
+    setLocationBusy(true)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords
+        setFoundAt({ lat, lng })
+        saveScan(tag!.id, lat, lng).catch(() => {})
+        setLocationBusy(false)
+        wa(`Ubicacion donde lo encontre: https://maps.google.com/?q=${lat},${lng}`)
+      },
+      () => { setLocationBusy(false); wa() },
+      { timeout: 8000 },
     )
   }
 
+  useEffect(() => {
+    if (!param) return
+    const timeout = setTimeout(() => setStatus('not_found'), 10_000)
+    getCode(param)
+      .then(async codeDoc => {
+        clearTimeout(timeout)
+        if (codeDoc) {
+          if (codeDoc.tagId) {
+            const tagData = await getTag(codeDoc.tagId)
+            if (tagData) { setTag(tagData); setStatus('found') }
+            else setStatus('not_found')
+          } else {
+            setCodeParam(param)
+            setStatus('not_activated')
+          }
+        } else {
+          const tagData = await getTag(param)
+          if (tagData) { setTag(tagData); setStatus('found') }
+          else setStatus('not_found')
+        }
+      })
+      .catch((err) => {
+        clearTimeout(timeout)
+        console.error('[PublicProfile] Error cargando tag:', err)
+        setStatus('not_found')
+      })
+    return () => clearTimeout(timeout)
+  }, [param])
+
+  if (status === 'loading') return <LoadingPaw />
+
   if (status === 'not_activated') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 16, padding: 24 }}>
-        <span style={{ fontSize: 48 }}>🐾</span>
-        <h2 style={{ textAlign: 'center' }}>Tag sin activar</h2>
-        <p style={{ textAlign: 'center', opacity: 0.7 }}>Este tag todavía no está configurado. ¡Activalo para proteger a tu mascota!</p>
-        <button
-          className="btn btn-primary"
-          onClick={() => {
-            sessionStorage.setItem('pendingCode', codeParam)
-            navigate(user ? `/app/tags/nuevo?code=${codeParam}` : `/activar?code=${codeParam}`)
-          }}
-        >
-          Activar este tag
-        </button>
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <HuellitasHeader />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 16, padding: 24 }}>
+          <span style={{ fontSize: 48 }}>🏷️</span>
+          <h2 style={{ textAlign: 'center' }}>Tag sin activar</h2>
+          <p style={{ textAlign: 'center', opacity: 0.7 }}>Este tag todavia no esta configurado. ¡Activalo ahora!</p>
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              sessionStorage.setItem('pendingCode', codeParam)
+              navigate(user ? `/app/tags/nuevo?code=${codeParam}` : `/activar?code=${codeParam}`)
+            }}
+          >
+            Activar este tag
+          </button>
+        </div>
+        <HuellitasFooter />
       </div>
     )
   }
 
   if (status === 'not_found') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: 16, padding: 24 }}>
-        <span style={{ fontSize: 48 }}>🔍</span>
-        <h2 style={{ textAlign: 'center' }}>Tag no encontrado</h2>
-        <p style={{ textAlign: 'center', opacity: 0.7 }}>Este código QR no existe en el sistema.</p>
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <HuellitasHeader />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 16, padding: 24 }}>
+          <span style={{ fontSize: 48 }}>🔍</span>
+          <h2 style={{ textAlign: 'center' }}>Tag no encontrado</h2>
+          <p style={{ textAlign: 'center', opacity: 0.7 }}>Este codigo QR no existe en el sistema.</p>
+        </div>
+        <HuellitasFooter />
       </div>
     )
   }
 
-  const whatsappUrl = tag?.ownerPhone
-    ? `https://wa.me/${tag.ownerPhone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola, encontré a ${tag.petName ?? 'tu mascota'} 🐾`)}`
-    : '#'
-
   const isDesktop = window.innerWidth >= 768
+  const isObject = tag?.type === 'objeto'
+  const phone = isObject ? (tag?.contactPhone ?? tag?.ownerPhone) : tag?.ownerPhone
+  const phoneNum = phone?.replace(/\s/g, '') ?? ''
+  const avatarSize = isDesktop ? 180 : 132
+  const mapLoc = foundAt ?? tag?.homeLocation ?? null
 
-  const avatarContent = tag?.photoUrl ? (
+  const avatarContent = isObject ? (
+    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 48 }}>
+      {categoryInfo(tag?.objectCategory).icon}
+    </div>
+  ) : tag?.photoUrl ? (
     <img src={tag.photoUrl} alt={tag.petName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
   ) : (
     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 48 }}>
@@ -116,20 +226,22 @@ export default function PublicProfile() {
     </div>
   )
 
-  const avatarSize = isDesktop ? 180 : 132
+  const displayName = isObject
+    ? categoryInfo(tag?.objectCategory).label
+    : (tag?.petName ?? 'Sin nombre')
+
+  const typeBadge = isObject
+    ? categoryInfo(tag?.objectCategory).label
+    : `${tag?.species === 'perro' ? 'Perro' : 'Gato'}${tag?.breed ? ` · ${tag.breed}` : ''}`
 
   const profileColumn = (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, width: isDesktop ? 240 : undefined }}>
       <div className="washed" style={{ width: avatarSize, height: avatarSize, borderRadius: '50%', overflow: 'hidden', boxShadow: 'var(--shadow-md)', flexShrink: 0, background: 'var(--color-neutral-200)' }}>
         {avatarContent}
       </div>
-      <h2 style={{ margin: '6px 0 0', fontSize: 26 }}>{tag?.petName ?? 'Sin nombre'}</h2>
+      <h2 style={{ margin: '6px 0 0', fontSize: 26 }}>{displayName}</h2>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
-        {tag?.species && (
-          <span className="tag tag-accent">
-            {tag.species === 'perro' ? 'Perro' : 'Gato'}{tag.breed ? ` · ${tag.breed}` : ''}
-          </span>
-        )}
+        <span className="tag tag-accent">{typeBadge}</span>
         <span className={`tag ${tag?.active ? 'tag-accent-2' : 'tag-neutral'}`}>
           {tag?.active ? 'Activo' : 'Inactivo'}
         </span>
@@ -137,55 +249,114 @@ export default function PublicProfile() {
     </div>
   )
 
+  const descriptionText = isObject ? tag?.objectDescription : tag?.healthNotes
+
   const cards = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', flex: 1 }}>
-      {tag?.healthNotes && (
+      {descriptionText && (
         <div className="card elev-sm" style={{ gap: 'var(--space-2)' }}>
-          <div className="card-kicker">Salud</div>
-          <p className="card-body" style={{ whiteSpace: 'pre-wrap' }}>{tag.healthNotes}</p>
+          <div className="card-kicker">Descripcion</div>
+          <p className="card-body" style={{ whiteSpace: 'pre-wrap' }}>{descriptionText}</p>
         </div>
       )}
 
       <div className="card elev-sm" style={{ gap: 'var(--space-2)' }}>
-        <div className="card-kicker">Contacto del dueño</div>
+        <div className="card-kicker">{isObject ? 'Contacto' : 'Contacto del dueño'}</div>
         {tag?.ownerName && <div className="card-title" style={{ fontSize: 16 }}>{tag.ownerName}</div>}
         <div style={{ display: 'flex', flexDirection: isDesktop ? 'row' : 'column', gap: 8, marginTop: 4 }}>
-          {tag?.ownerPhone && (
-            <a href={whatsappUrl} className="btn btn-primary" style={{ flex: isDesktop ? undefined : undefined, textDecoration: 'none', width: isDesktop ? undefined : '100%' }} target="_blank" rel="noreferrer">
-              <WhatsAppIcon /> Escribir por WhatsApp
-            </a>
+          {phone && (
+            <button
+              className="btn btn-primary"
+              style={{ width: isDesktop ? undefined : '100%' }}
+              disabled={locationBusy}
+              onClick={handleWhatsApp}
+            >
+              <WhatsAppIcon />{' '}
+              {locationBusy ? 'Obteniendo ubicacion...' : 'Escribir por WhatsApp'}
+            </button>
           )}
-          {tag?.ownerPhone && (
-            <a href={`tel:${tag.ownerPhone}`} className="btn btn-secondary" style={{ textDecoration: 'none', width: isDesktop ? undefined : '100%' }}>
-              <PhoneIcon /> Llamar al dueño
+          {phoneNum && (
+            <a
+              href={`tel:${phoneNum}`}
+              className="btn btn-secondary"
+              style={{
+                textDecoration: 'none',
+                width: isDesktop ? undefined : '100%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}
+            >
+              <PhoneIcon /> Llamar
             </a>
           )}
         </div>
       </div>
 
-      <div className="card elev-sm" style={{ gap: 'var(--space-2)' }}>
-        <div className="card-kicker">Última ubicación conocida</div>
-        <MapPlaceholder />
-        <p className="card-body" style={{ fontSize: 12 }}>Ubicación no disponible aún</p>
+      {mapLoc && (
+        <div className="card elev-sm" style={{ gap: 'var(--space-2)' }}>
+          <div className="card-kicker">Ubicacion</div>
+          <MapView lat={mapLoc.lat} lng={mapLoc.lng} />
+          <p className="card-body" style={{ fontSize: 12 }}>
+            {foundAt ? 'Ubicacion compartida con el dueño' : 'Zona aproximada del hogar'}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+
+  const locationModal = showLocationModal && (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 500,
+      background: 'rgba(0,0,0,0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 24,
+    }}>
+      <div className="card elev-md" style={{ maxWidth: 340, gap: 'var(--space-3)', textAlign: 'center', padding: 'var(--space-5)' }}>
+        <p style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>
+          Compartir ubicacion
+        </p>
+        <p style={{ margin: 0, fontSize: 13, opacity: 0.75, lineHeight: 1.5 }}>
+          {isObject
+            ? 'Para ayudar al dueño a recuperar su objeto, podes enviar la ubicacion donde lo encontraste junto con el mensaje de WhatsApp.'
+            : 'Para ayudar al dueño a encontrar a su mascota, podes enviar la ubicacion donde la encontraste junto con el mensaje de WhatsApp.'
+          }
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+          <button className="btn btn-primary btn-block" onClick={() => sendWhatsApp(true)}>
+            Enviar con ubicacion
+          </button>
+          <button className="btn btn-secondary btn-block" onClick={() => sendWhatsApp(false)}>
+            Enviar sin ubicacion
+          </button>
+        </div>
       </div>
     </div>
   )
 
   if (isDesktop) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--color-bg)', padding: '40px 48px' }}>
-        <div style={{ display: 'flex', gap: 36, maxWidth: 920, margin: '0 auto', alignItems: 'flex-start' }}>
-          {profileColumn}
-          {cards}
+      <div style={{ minHeight: '100vh', background: 'var(--color-bg)', display: 'flex', flexDirection: 'column' }}>
+        <HuellitasHeader />
+        <div style={{ flex: 1, padding: '40px 48px' }}>
+          <div style={{ display: 'flex', gap: 36, maxWidth: 920, margin: '0 auto', alignItems: 'flex-start' }}>
+            {profileColumn}
+            {cards}
+          </div>
         </div>
+        <HuellitasFooter />
+        {locationModal}
       </div>
     )
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--color-bg)', padding: '28px 20px 40px', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-      {profileColumn}
-      {cards}
+    <div style={{ minHeight: '100vh', background: 'var(--color-bg)', display: 'flex', flexDirection: 'column' }}>
+      <HuellitasHeader />
+      <div style={{ flex: 1, padding: '28px 20px 40px', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        {profileColumn}
+        {cards}
+      </div>
+      <HuellitasFooter />
+      {locationModal}
     </div>
   )
 }

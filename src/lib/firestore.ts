@@ -97,6 +97,15 @@ export async function claimCode(code: string, tagId: string) {
   })
 }
 
+// Scans (location saved when someone scans a tag)
+export async function saveScan(tagId: string, lat?: number, lng?: number) {
+  await addDoc(collection(db, 'tags', tagId, 'scans'), {
+    lat: lat ?? null,
+    lng: lng ?? null,
+    scannedAt: serverTimestamp(),
+  })
+}
+
 // Users
 export async function getUserRole(uid: string): Promise<'user' | 'admin'> {
   const snap = await getDoc(doc(db, 'users', uid))

@@ -38,6 +38,10 @@ function Switch({ active, onToggle }: { active: boolean; onToggle: () => void })
   )
 }
 
+const OBJECT_CATEGORY_ICONS: Record<string, string> = {
+  mochila: '🎒', cartera: '👜', llaves: '🔑', indumentaria: '👕', otro: '📦',
+}
+
 function PetIcon({ species }: { species?: 'perro' | 'gato' }) {
   if (species === 'gato') {
     return (
@@ -114,7 +118,9 @@ export default function Dashboard() {
         }}>
           {tag.photoUrl
             ? <img src={tag.photoUrl} alt={tag.petName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <PetIcon species={tag.species} />
+            : tag.type === 'objeto'
+              ? <span style={{ fontSize: 22 }}>{OBJECT_CATEGORY_ICONS[tag.objectCategory ?? ''] ?? '📦'}</span>
+              : <PetIcon species={tag.species} />
           }
         </div>
         <div style={{ flex: isList ? 1 : undefined, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3, alignItems: isList ? 'flex-start' : 'center' }}>

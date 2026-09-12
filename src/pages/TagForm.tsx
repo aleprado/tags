@@ -5,8 +5,17 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { Html5Qrcode } from 'html5-qrcode'
 import { storage } from '../lib/firebase'
 import { useAuth } from '../context/AuthContext'
-import { getTag, updateTag, deleteTag } from '../lib/firestore'
+import { getTag, updateTag } from '../lib/firestore'
 import AppLayout from '../layouts/AppLayout'
+import ActivationScene from '../components/ActivationScene'
+
+const OBJECT_CATEGORIES = [
+  { value: 'mochila', label: 'Mochila' },
+  { value: 'cartera', label: 'Cartera' },
+  { value: 'llaves', label: 'Llaves' },
+  { value: 'indumentaria', label: 'Indumentaria' },
+  { value: 'otro', label: 'Otro' },
+] as const
 
 function QRScanner({ onScan, onClose }: { onScan: (code: string) => void; onClose: () => void }) {
   const [errMsg, setErrMsg] = useState('')
@@ -23,7 +32,6 @@ function QRScanner({ onScan, onClose }: { onScan: (code: string) => void; onClos
       (text) => {
         if (stoppedRef.current) return
         stoppedRef.current = true
-        // Extract code from URL like ".../p/HU-xxx" or use text directly
         let code = text
         try {
           const parts = new URL(text).pathname.split('/')
@@ -33,7 +41,7 @@ function QRScanner({ onScan, onClose }: { onScan: (code: string) => void; onClos
         scanner.stop().catch(() => {}).then(() => onScan(code))
       },
       undefined,
-    ).catch(err => setErrMsg(err?.message ?? 'No se pudo acceder a la cámara'))
+    ).catch(err => setErrMsg(err?.message ?? 'No se pudo acceder a la camara'))
 
     return () => {
       if (!stoppedRef.current) {
@@ -50,7 +58,7 @@ function QRScanner({ onScan, onClose }: { onScan: (code: string) => void; onClos
       padding: 24,
     }}>
       <p style={{ color: '#fff', fontSize: 15, margin: 0, textAlign: 'center', fontFamily: 'var(--font-body)' }}>
-        Apuntá la cámara al código QR del tag
+        Apunta la camara al codigo QR del tag
       </p>
       <div
         id="hu-qr-scanner"
@@ -122,7 +130,6 @@ export default function TagForm() {
   const { user } = useAuth()
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // Code: prefer URL param, then sessionStorage, then scanned via camera
   const codeFromSession = !isEdit ? (sessionStorage.getItem('pendingCode') ?? '') : ''
   const [scannedCode, setScannedCode] = useState('')
   const [showScanner, setShowScanner] = useState(false)
@@ -134,14 +141,24 @@ export default function TagForm() {
   const [age, setAge] = useState('')
   const [healthNotes, setHealthNotes] = useState('')
   const [ownerName, setOwnerName] = useState('')
-  const [ownerPhone, setOwnerPhone] = useState('')
+  const [ownerPhone, setOwnerPhone] = useState(isEdit ? '' : '+54 ')
   const [active, setActive] = useState(true)
   const [photoUrl, setPhotoUrl] = useState('')
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState('')
+  const [homeLocation, setHomeLocation] = useState<{ lat: number; lng: number } | null>(null)
+  const [locating, setLocating] = useState(false)
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [toast, setToast] = useState('')
   const [error, setError] = useState('')
+  const [showActivation, setShowActivation] = useState(false)
+  const savePromiseRef = useRef<Promise<void> | null>(null)
+
+  // Object fields
+  const [objectCategory, setObjectCategory] = useState<'mochila' | 'cartera' | 'llaves' | 'indumentaria' | 'otro'>('mochila')
+  const [objectDescription, setObjectDescription] = useState('')
 
   useEffect(() => {
     if (!id) return
@@ -156,6 +173,9 @@ export default function TagForm() {
       setOwnerPhone(tag.ownerPhone ?? '')
       setActive(tag.active)
       setPhotoUrl(tag.photoUrl ?? '')
+      if (tag.homeLocation) setHomeLocation(tag.homeLocation)
+      if (tag.objectCategory) setObjectCategory(tag.objectCategory)
+      setObjectDescription(tag.objectDescription ?? '')
       setLoading(false)
     })
   }, [id, navigate])
@@ -167,44 +187,81 @@ export default function TagForm() {
     setPhotoPreview(URL.createObjectURL(file))
   }
 
+  function handleUseMyLocation() {
+    if (!navigator.geolocation) return
+    setLocating(true)
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setHomeLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+        setLocating(false)
+      },
+      () => setLocating(false),
+      { timeout: 8000 },
+    )
+  }
+
+  function buildTagData(finalPhotoUrl: string) {
+    if (tagType === 'mascota') {
+      return {
+        type: tagType, active,
+        petName, species, age,
+        healthNotes,
+        ownerName, ownerPhone,
+        photoUrl: finalPhotoUrl || undefined,
+        homeLocation: homeLocation ?? undefined,
+      }
+    }
+    return {
+      type: tagType, active,
+      objectCategory,
+      objectDescription,
+      ownerName, ownerPhone,
+      homeLocation: homeLocation ?? undefined,
+    }
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     if (!user) return
     if (!isEdit && !effectiveCode) {
-      setError('Ingresá el código del tag para activarlo.')
+      setError('Ingresa el codigo del tag para activarlo.')
       return
     }
-    setSaving(true)
     setError('')
-    try {
-      let finalPhotoUrl = photoUrl
-      if (photoFile) {
-        const storageRef = ref(storage, `pets/${user.uid}/${Date.now()}_${photoFile.name}`)
-        await uploadBytes(storageRef, photoFile)
-        finalPhotoUrl = await getDownloadURL(storageRef)
-      }
 
-      const tagData = {
-        type: tagType,
-        active,
-        petName: tagType === 'mascota' ? petName : undefined,
-        species: tagType === 'mascota' ? species : undefined,
-        age: tagType === 'mascota' ? age : undefined,
-        healthNotes: tagType === 'mascota' ? healthNotes : undefined,
-        ownerName: tagType === 'mascota' ? ownerName : undefined,
-        ownerPhone: tagType === 'mascota' ? ownerPhone : undefined,
-        photoUrl: finalPhotoUrl || undefined,
-      }
-
-      if (isEdit && id) {
-        await updateTag(id, tagData)
-      } else {
+    if (!isEdit) {
+      setShowActivation(true)
+      savePromiseRef.current = (async () => {
+        let finalPhotoUrl = photoUrl
+        if (photoFile && tagType === 'mascota') {
+          const storageRef = ref(storage, `pets/${user.uid}/${Date.now()}_${photoFile.name}`)
+          await uploadBytes(storageRef, photoFile)
+          finalPhotoUrl = await getDownloadURL(storageRef)
+        }
+        const tagData = buildTagData(finalPhotoUrl)
         const fn = httpsCallable<{ code: string; tagData: Record<string, unknown> }, { tagId: string }>(
           getFunctions(), 'claimCode'
         )
         await fn({ code: effectiveCode, tagData })
         sessionStorage.removeItem('pendingCode')
+      })()
+      savePromiseRef.current.catch(err => {
+        setShowActivation(false)
+        setError(err instanceof Error ? err.message : 'Error al guardar')
+      })
+      return
+    }
+
+    setSaving(true)
+    try {
+      let finalPhotoUrl = photoUrl
+      if (photoFile && tagType === 'mascota') {
+        const storageRef = ref(storage, `pets/${user.uid}/${Date.now()}_${photoFile.name}`)
+        await uploadBytes(storageRef, photoFile)
+        finalPhotoUrl = await getDownloadURL(storageRef)
       }
+      const tagData = buildTagData(finalPhotoUrl)
+      await updateTag(id!, tagData)
       navigate('/app/tags')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error al guardar')
@@ -214,15 +271,23 @@ export default function TagForm() {
   }
 
   async function handleDelete() {
-    if (!id || !confirm('¿Eliminar este tag? Esta acción no se puede deshacer.')) return
-    await deleteTag(id)
-    navigate('/app/tags')
+    if (!id || !confirm('Eliminar este tag? El codigo QR quedara libre para ser activado por cualquier cuenta.')) return
+    setDeleting(true)
+    try {
+      const fn = httpsCallable<{ tagId: string }, { success: boolean }>(getFunctions(), 'deleteTag')
+      await fn({ tagId: id })
+      setToast('Tag eliminado. El llavero fisico puede volver a activarse con cualquier cuenta.')
+      setTimeout(() => navigate('/app/tags'), 3000)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Error al eliminar')
+      setDeleting(false)
+    }
   }
 
   if (loading) {
     return (
       <AppLayout>
-        <p style={{ opacity: 0.6 }}>Cargando…</p>
+        <p style={{ opacity: 0.6 }}>Cargando...</p>
       </AppLayout>
     )
   }
@@ -277,8 +342,11 @@ export default function TagForm() {
       )}
 
       <div className="field">
-        <label htmlFor="pf-health">Condiciones de salud / alergias</label>
-        <textarea className="input" id="pf-health" rows={3} value={healthNotes} onChange={e => setHealthNotes(e.target.value)} placeholder="Ej: Alergia al polen, vacunas al día…" />
+        <label htmlFor="pf-desc">Descripcion</label>
+        <textarea className="input" id="pf-desc" rows={3} value={healthNotes} onChange={e => setHealthNotes(e.target.value)} placeholder="Ej: Alergia al polen, es asustadizo, muerde si se lo acorrala..." />
+        <span style={{ fontSize: 11, opacity: 0.5, marginTop: 2 }}>
+          Condiciones de salud, temperamento, o cualquier dato util para quien lo encuentre.
+        </span>
       </div>
 
       {twoCol ? (
@@ -288,8 +356,8 @@ export default function TagForm() {
             <input className="input" id="pf-owner" value={ownerName} onChange={e => setOwnerName(e.target.value)} required />
           </div>
           <div className="field">
-            <label htmlFor="pf-phone">Teléfono de contacto</label>
-            <input className="input" id="pf-phone" type="tel" placeholder="+54 9 11 …" value={ownerPhone} onChange={e => setOwnerPhone(e.target.value)} required />
+            <label htmlFor="pf-phone">Telefono de contacto</label>
+            <input className="input" id="pf-phone" type="tel" placeholder="+54 9 11 ..." value={ownerPhone} onChange={e => setOwnerPhone(e.target.value)} required />
           </div>
         </div>
       ) : (
@@ -299,16 +367,111 @@ export default function TagForm() {
             <input className="input" id="pf-owner" value={ownerName} onChange={e => setOwnerName(e.target.value)} required />
           </div>
           <div className="field">
-            <label htmlFor="pf-phone">Teléfono de contacto</label>
-            <input className="input" id="pf-phone" type="tel" placeholder="+54 9 11 …" value={ownerPhone} onChange={e => setOwnerPhone(e.target.value)} required />
+            <label htmlFor="pf-phone">Telefono de contacto</label>
+            <input className="input" id="pf-phone" type="tel" placeholder="+54 9 11 ..." value={ownerPhone} onChange={e => setOwnerPhone(e.target.value)} required />
           </div>
         </>
       )}
     </>
   )
 
+  const objetoFields = (twoCol: boolean) => (
+    <>
+      <div className="field">
+        <label htmlFor="pf-obj-cat">Categoria</label>
+        <div className="seg" style={{ width: '100%', flexWrap: 'wrap' }}>
+          {OBJECT_CATEGORIES.map(cat => (
+            <label className="seg-opt" key={cat.value}>
+              <input type="radio" name="objcat" checked={objectCategory === cat.value} onChange={() => setObjectCategory(cat.value)} />
+              {cat.label}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="field">
+        <label htmlFor="pf-obj-desc">Descripcion</label>
+        <textarea className="input" id="pf-obj-desc" rows={3} value={objectDescription} onChange={e => setObjectDescription(e.target.value)} placeholder="Ej: Mochila negra North Face, tiene un llavero rojo..." />
+        <span style={{ fontSize: 11, opacity: 0.5, marginTop: 2 }}>
+          Color, marca, contenido importante, o cualquier dato que ayude a identificarlo.
+        </span>
+      </div>
+
+      {twoCol ? (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
+          <div className="field">
+            <label htmlFor="pf-obj-owner">Tu nombre</label>
+            <input className="input" id="pf-obj-owner" value={ownerName} onChange={e => setOwnerName(e.target.value)} required />
+          </div>
+          <div className="field">
+            <label htmlFor="pf-obj-phone">Telefono de contacto</label>
+            <input className="input" id="pf-obj-phone" type="tel" placeholder="+54 9 11 ..." value={ownerPhone} onChange={e => setOwnerPhone(e.target.value)} required />
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="field">
+            <label htmlFor="pf-obj-owner">Tu nombre</label>
+            <input className="input" id="pf-obj-owner" value={ownerName} onChange={e => setOwnerName(e.target.value)} required />
+          </div>
+          <div className="field">
+            <label htmlFor="pf-obj-phone">Telefono de contacto</label>
+            <input className="input" id="pf-obj-phone" type="tel" placeholder="+54 9 11 ..." value={ownerPhone} onChange={e => setOwnerPhone(e.target.value)} required />
+          </div>
+        </>
+      )}
+    </>
+  )
+
+  const actionButtons = (
+    <>
+      <button
+        type="button"
+        className="btn btn-secondary"
+        disabled={locating}
+        onClick={handleUseMyLocation}
+        style={{ alignSelf: 'flex-start' }}
+      >
+        {locating ? 'Obteniendo ubicacion...' : homeLocation ? 'Ubicacion guardada' : 'Usar mi ubicacion (home)'}
+      </button>
+      {homeLocation && (
+        <p style={{ margin: 0, fontSize: 12, opacity: 0.55 }}>
+          {homeLocation.lat.toFixed(5)}, {homeLocation.lng.toFixed(5)}
+        </p>
+      )}
+      <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+        <button type="submit" className="btn btn-primary" disabled={saving || deleting}>
+          {saving ? 'Guardando...' : 'Guardar cambios'}
+        </button>
+        {isEdit && (
+          <button type="button" className="btn btn-ghost" onClick={handleDelete} disabled={deleting} style={{ color: 'var(--color-accent-700)' }}>
+            {deleting ? 'Eliminando...' : 'Eliminar tag'}
+          </button>
+        )}
+      </div>
+      {isEdit && (
+        <p style={{ margin: 0, fontSize: 12, opacity: 0.5, lineHeight: 1.5 }}>
+          Al eliminar, el llavero fisico queda libre y puede ser activado nuevamente por cualquier cuenta.
+        </p>
+      )}
+    </>
+  )
+
   return (
+    <>
     <AppLayout>
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)',
+          background: '#1a1a18', color: '#fff',
+          padding: '12px 22px', borderRadius: 999, zIndex: 600,
+          fontSize: 13, lineHeight: 1.5, textAlign: 'center',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.25)',
+          maxWidth: 360, width: 'calc(100% - 48px)',
+        }}>
+          {toast}
+        </div>
+      )}
       <form onSubmit={handleSave}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 'var(--space-4)' }}>
           <button type="button" className="btn btn-ghost btn-icon" onClick={() => navigate('/app/tags')} style={{ padding: 4 }}>
@@ -333,7 +496,7 @@ export default function TagForm() {
               <path d="M14 14h3v3h-3zM17.5 17.5H21V21h-3.5z"/>
             </svg>
             <p style={{ margin: 0, fontSize: 13, opacity: 0.75 }}>
-              Para activar tu tag necesitás escanear el QR del llavero físico.
+              Para activar tu tag necesitas escanear el QR del llavero fisico.
             </p>
             <button type="button" className="btn btn-primary" onClick={() => setShowScanner(true)}>
               Escanear QR
@@ -376,10 +539,9 @@ export default function TagForm() {
               {mascotaFields(false)}
             </>
           ) : (
-            <div className="card elev-sm" style={{ alignItems: 'center', textAlign: 'center', gap: 6, padding: 'var(--space-6) var(--space-3)' }}>
-              <div className="card-kicker">Próximamente</div>
-              <p className="card-body">Los campos para objetos se habilitan sin rediseñar la app.</p>
-            </div>
+            <>
+              {objetoFields(false)}
+            </>
           )}
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 4px' }}>
@@ -387,17 +549,35 @@ export default function TagForm() {
             <Switch active={active} onToggle={() => setActive(a => !a)} />
           </div>
 
-          {tagType === 'mascota' && (
-            <button type="submit" className="btn btn-primary btn-block" disabled={saving}>
-              {saving ? 'Guardando…' : 'Guardar cambios'}
-            </button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-block"
+            disabled={locating}
+            onClick={handleUseMyLocation}
+          >
+            {locating ? 'Obteniendo ubicacion...' : homeLocation ? `Ubicacion guardada (${homeLocation.lat.toFixed(4)}, ${homeLocation.lng.toFixed(4)})` : 'Usar mi ubicacion (home)'}
+          </button>
+          <button type="submit" className="btn btn-primary btn-block" disabled={saving || deleting}>
+            {saving ? 'Guardando...' : 'Guardar cambios'}
+          </button>
+          {isEdit && (
+            <>
+              <button type="button" className="btn btn-ghost btn-block" onClick={handleDelete} disabled={deleting} style={{ color: 'var(--color-accent-700)' }}>
+                {deleting ? 'Eliminando...' : 'Eliminar tag'}
+              </button>
+              <p style={{ margin: 0, fontSize: 12, opacity: 0.5, lineHeight: 1.5, textAlign: 'center' }}>
+                Al eliminar, el llavero fisico queda libre y puede ser activado por cualquier cuenta.
+              </p>
+            </>
           )}
         </div>
 
         {/* Desktop layout */}
         <div className="desktop-only" style={{ display: 'flex', gap: 36, maxWidth: 920, alignItems: 'flex-start' }}>
           <div style={{ width: 260, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            <div style={{ display: 'flex', justifyContent: 'center' }}>{photoSlot(120)}</div>
+            {tagType === 'mascota' && (
+              <div style={{ display: 'flex', justifyContent: 'center' }}>{photoSlot(120)}</div>
+            )}
             <div className="field">
               <label>Tipo de tag</label>
               <div className="seg" style={{ width: '100%' }}>
@@ -416,30 +596,14 @@ export default function TagForm() {
             )}
           </div>
 
-          {tagType === 'mascota' ? (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-              {mascotaFields(true)}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 4px' }}>
-                <span style={{ fontSize: 13 }}>Tag activo</span>
-                <Switch active={active} onToggle={() => setActive(a => !a)} />
-              </div>
-              <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
-                <button type="submit" className="btn btn-primary" disabled={saving}>
-                  {saving ? 'Guardando…' : 'Guardar cambios'}
-                </button>
-                {isEdit && (
-                  <button type="button" className="btn btn-ghost" onClick={handleDelete} style={{ color: 'var(--color-accent-700)' }}>
-                    Eliminar tag
-                  </button>
-                )}
-              </div>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            {tagType === 'mascota' ? mascotaFields(true) : objetoFields(true)}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 4px' }}>
+              <span style={{ fontSize: 13 }}>Tag activo</span>
+              <Switch active={active} onToggle={() => setActive(a => !a)} />
             </div>
-          ) : (
-            <div className="card elev-sm" style={{ flex: 1, alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 6, padding: 'var(--space-6)' }}>
-              <div className="card-kicker">Próximamente</div>
-              <p className="card-body">Los campos para objetos (contacto, recompensa, descripción) usan la misma estructura modular — se habilitan sin rediseñar la app.</p>
-            </div>
-          )}
+            {actionButtons}
+          </div>
         </div>
       </form>
 
@@ -454,5 +618,15 @@ export default function TagForm() {
         }
       `}</style>
     </AppLayout>
+    {showActivation && (
+      <ActivationScene
+        petName={tagType === 'mascota' ? petName : (OBJECT_CATEGORIES.find(c => c.value === objectCategory)?.label ?? 'Objeto')}
+        onDone={async () => {
+          try { if (savePromiseRef.current) await savePromiseRef.current } catch { return }
+          navigate('/app/tags')
+        }}
+      />
+    )}
+  </>
   )
 }
