@@ -4,6 +4,7 @@ import { getStorage } from 'firebase-admin/storage'
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https'
 // CORS allowed origins (browser calls only; server-to-server webhooks have no Origin).
 const ALLOWED_ORIGINS = [
+  'https://huellis.art',
   'https://tags-8bcd8.web.app',
   'https://tags-8bcd8.firebaseapp.com',
 ]
@@ -70,7 +71,7 @@ export const generateQRBatch = onCall({ maxInstances: 1, cors: ALLOWED_ORIGINS }
   const QRCode = require('qrcode') as typeof import('qrcode')
   const db = getFirestore()
   const bucket = getStorage().bucket()
-  const appUrl = process.env.APP_URL ?? 'https://tags-8bcd8.web.app'
+  const appUrl = process.env.APP_URL ?? 'https://huellis.art'
   const count = Math.min(Math.max(1, (request.data as { count?: number }).count ?? 10), 500)
 
   const codes: string[] = []
@@ -115,7 +116,7 @@ export const createMPPreference = onCall(
     const token = process.env.MP_ACCESS_TOKEN
     if (!token) throw new HttpsError('failed-precondition', 'MP_ACCESS_TOKEN no configurado')
 
-    const appUrl = process.env.APP_URL ?? 'https://tags-8bcd8.web.app'
+    const appUrl = process.env.APP_URL ?? 'https://huellis.art'
 
     const res = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',

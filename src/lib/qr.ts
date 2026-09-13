@@ -4,7 +4,7 @@
 // panel admin tienen que salir byte-idénticos: si tocás uno, tocá el otro.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const APP_ORIGIN = 'https://tags-8bcd8.web.app'
+export const APP_ORIGIN = 'https://huellis.art'
 const QR_STORAGE_BASE = 'https://storage.googleapis.com/tags-8bcd8.firebasestorage.app/qr'
 
 /** URL que codifica el QR de un código. */

@@ -177,8 +177,7 @@ export default function Print3D() {
                   <Num label="Alto" suffix="mm" value={p.plateH} min={10} onChange={v => set('plateH', v)} />
                   <Num label="Radio sup." suffix="mm" value={p.topR} min={1} onChange={v => set('topR', v)} />
                   <Num label="Espesor base" suffix="mm" value={p.baseThickness} min={0.4} onChange={v => set('baseThickness', v)} />
-                  {!p.inlay && <Num label="Relieve QR" suffix="mm" value={p.qrReliefH} min={0.2} onChange={v => set('qrReliefH', v)} />}
-                  {p.inlay && <Num label="Capa inlay" suffix="mm" value={p.inlayH} min={0.2} max={1} step={0.2} onChange={v => set('inlayH', v)} />}
+                  <Num label="Relieve QR" suffix="mm" value={p.qrReliefH} min={0.2} onChange={v => set('qrReliefH', v)} />
                   <Num label="Fillet" suffix="mm" value={p.chamfer} min={0} max={2} onChange={v => set('chamfer', v)} />
                   <Num label="Módulos quiet" value={p.quietModules} step={1} min={0} max={4} onChange={v => set('quietModules', v)} />
                   <Num label="Ø agujero" suffix="mm" value={p.holeD} min={1} onChange={v => set('holeD', v)} />
@@ -197,15 +196,6 @@ export default function Print3D() {
                       <option value="Q">Q — 25%</option>
                       <option value="H">H — 30%</option>
                     </select>
-                  </div>
-                  <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <input
-                      type="checkbox"
-                      checked={p.inlay}
-                      onChange={e => set('inlay', e.target.checked)}
-                      id="inlay"
-                    />
-                    <label htmlFor="inlay" style={{ fontSize: 11 }}>Inlay 2 colores</label>
                   </div>
                   <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <input
@@ -251,7 +241,6 @@ export default function Print3D() {
                           const tr = 0.307 * R
                           return (
                             <g transform={`rotate(-12, ${cx}, ${cy})`}>
-                              <circle cx={cx} cy={cy} r={R} fill={C_FG} opacity={0.18} />
                               <ellipse cx={cx} cy={cy - 0.455 * R} rx={0.636 * R} ry={0.545 * R} fill={C_FG} />
                               {([[-0.625, 0.375], [0, 0.648], [0.625, 0.375]] as [number, number][]).map(([dx, dy], i) => (
                                 <circle key={i} cx={cx + dx * R} cy={cy + dy * R} r={tr} fill={C_FG} />
@@ -382,21 +371,9 @@ export default function Print3D() {
               ))}
 
               <p style={{ margin: 0, fontSize: 11, opacity: 0.55, lineHeight: 1.6 }}>
-                {p.inlay ? (
-                  <>
-                    <strong>Modo inlay (2 colores):</strong> El QR se imprime como primera capa ({p.inlayH}mm)
-                    en color oscuro. En Bambu Studio, agregar un cambio de filamento en la capa{' '}
-                    {Math.round(p.inlayH / 0.2)} (Z={p.inlayH}mm). Después de la pausa, cargar el filamento
-                    claro para el cuerpo del tag. Al retirar de la cama, el QR queda incrustado en la cara
-                    inferior con acabado liso del PEI.
-                  </>
-                ) : (
-                  <>
-                    Cada archivo trae las {perSheet} chapas ya posicionadas en la grilla. El STL binario no
-                    agrupa sólidos. Bambu Studio puede ofrecer repararlo — el relieve se hunde en la base
-                    a propósito, rebana bien igual. El QR sale en relieve para pintarlo con rodillo.
-                  </>
-                )}
+                Cada archivo trae las {perSheet} chapas ya posicionadas en la grilla. El STL binario no
+                agrupa sólidos. Bambu Studio puede ofrecer repararlo — el relieve se hunde en la base
+                a propósito, rebana bien igual. El QR sale en relieve para pintarlo con rodillo.
               </p>
             </div>
           </>

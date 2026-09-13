@@ -32,19 +32,17 @@ export interface Tag3DParams {
   pitchY: number
   interleave: boolean
   bedSize: number
-  inlay: boolean
-  inlayH: number
 }
 
 export const DEFAULT_TAG3D: Tag3DParams = {
   plateW: 40,
   plateH: 55,
   topR: 5,
-  baseThickness: 2.5,
+  baseThickness: 5,
   holeD: 3.5,
   holeMarginTop: 2.6,
   qrEcl: 'M',
-  quietModules: 2,
+  quietModules: 1,
   qrReliefH: 0.8,
   pawSize: 10,
   chamfer: 1.0,
@@ -53,11 +51,9 @@ export const DEFAULT_TAG3D: Tag3DParams = {
   cols: 3,
   rows: 3,
   pitchX: 42,
-  pitchY: 48,
-  interleave: true,
+  pitchY: 58,
+  interleave: false,
   bedSize: 180,
-  inlay: false,
-  inlayH: 0.4,
 }
 
 export const MIN_MODULE_MM = 0.85
@@ -161,10 +157,8 @@ export function buildPawRelief(
   cx: number, cy: number,
   pawSize: number,
   zBase: number, z1: number,
-  sinkEps: number,
   step: number,
   mirrorX = false,
-  flat = false,
 ): void {
   if (pawSize <= 0) return
   const R = pawSize / 2
@@ -175,30 +169,8 @@ export function buildPawRelief(
   const rot = (dx: number, dy: number): [number, number] =>
     [mx * (dx * ca - dy * sa), dx * sa + dy * ca]
 
-  if (flat) {
-    addEllipseRelief(s, cx, cy, R, R, zBase, z1, step)
-    const [padDx, padDy] = rot(0, -0.455 * R)
-    addEllipseRelief(s, cx + padDx, cy + padDy, 0.636 * R, 0.545 * R, zBase, z1, step)
-    const tr = 0.307 * R
-    for (const [dx, dy] of [
-      [-0.625 * R, +0.375 * R],
-      [         0, +0.648 * R],
-      [+0.625 * R, +0.375 * R],
-    ] as [number, number][]) {
-      const [rdx, rdy] = rot(dx, dy)
-      addEllipseRelief(s, cx + rdx, cy + rdy, tr, tr, zBase, z1, step)
-    }
-    return
-  }
-
-  const discH = Math.min(0.4, (z1 - zBase) * 0.45)
-  const zDisc = zBase + discH
-  const zEls = zDisc - sinkEps
-
-  addEllipseRelief(s, cx, cy, R, R, zBase, zDisc, step)
-
   const [padDx, padDy] = rot(0, -0.455 * R)
-  addEllipseRelief(s, cx + padDx, cy + padDy, 0.636 * R, 0.545 * R, zEls, z1, step)
+  addEllipseRelief(s, cx + padDx, cy + padDy, 0.636 * R, 0.545 * R, zBase, z1, step)
 
   const tr = 0.307 * R
   for (const [dx, dy] of [
@@ -207,7 +179,7 @@ export function buildPawRelief(
     [+0.625 * R, +0.375 * R],
   ] as [number, number][]) {
     const [rdx, rdy] = rot(dx, dy)
-    addEllipseRelief(s, cx + rdx, cy + rdy, tr, tr, zEls, z1, step)
+    addEllipseRelief(s, cx + rdx, cy + rdy, tr, tr, zBase, z1, step)
   }
 }
 
@@ -217,20 +189,6 @@ function rotateQr180(qr: QrGrid): QrGrid {
   const n = qr.size
   const data = new Uint8Array(n * n)
   for (let i = 0; i < n * n; i++) data[i] = qr.data[n * n - 1 - i]
-  return {
-    size: n,
-    version: qr.version,
-    data,
-    get: (row, col) => data[row * n + col] === 1,
-  }
-}
-
-function mirrorQrX(qr: QrGrid): QrGrid {
-  const n = qr.size
-  const data = new Uint8Array(n * n)
-  for (let r = 0; r < n; r++)
-    for (let c = 0; c < n; c++)
-      data[r * n + c] = qr.data[r * n + (n - 1 - c)]
   return {
     size: n,
     version: qr.version,
@@ -261,41 +219,22 @@ export function buildPlate(
   const actualQr = flip ? rotateQr180(qr) : qr
   const qrCy = ySign * layout.qrCenterY
 
-  if (p.inlay) {
-    const ih = p.inlayH
-    const inlayQr = mirrorQrX(actualQr)
-    addGridRelief(
-      s, inlayQr.data, inlayQr.size, inlayQr.size,
-      dx + layout.qrLeft, dy + qrCy - layout.qrSize / 2, layout.moduleMm,
-      0, ih,
-    )
-    buildPawRelief(
-      s, dx, dy + ySign * layout.pawCy, p.pawSize,
-      0, ih, 0, p.outlineStep, true, true,
-    )
-    addSlabWithHole(
-      s, outline,
-      { cx: dx, cy: dy + ySign * layout.holeCy, r: layout.holeR },
-      ih, ih + p.baseThickness, 0.05, 0,
-    )
-  } else {
-    addSlabWithHole(
-      s, outline,
-      { cx: dx, cy: dy + ySign * layout.holeCy, r: layout.holeR },
-      0, p.baseThickness, 0.05, p.chamfer,
-    )
-    const zBase = p.baseThickness - p.sinkEps
-    const zTop = p.baseThickness + p.qrReliefH
-    addGridRelief(
-      s, actualQr.data, actualQr.size, actualQr.size,
-      dx + layout.qrLeft, dy + qrCy - layout.qrSize / 2, layout.moduleMm,
-      zBase, zTop,
-    )
-    buildPawRelief(
-      s, dx, dy + ySign * layout.pawCy, p.pawSize,
-      zBase, zTop, p.sinkEps, p.outlineStep,
-    )
-  }
+  addSlabWithHole(
+    s, outline,
+    { cx: dx, cy: dy + ySign * layout.holeCy, r: layout.holeR },
+    0, p.baseThickness, 0.05, p.chamfer,
+  )
+  const zBase = p.baseThickness - p.sinkEps
+  const zTop = p.baseThickness + p.qrReliefH
+  addGridRelief(
+    s, actualQr.data, actualQr.size, actualQr.size,
+    dx + layout.qrLeft, dy + qrCy - layout.qrSize / 2, layout.moduleMm,
+    zBase, zTop,
+  )
+  buildPawRelief(
+    s, dx, dy + ySign * layout.pawCy, p.pawSize,
+    zBase, zTop, p.outlineStep,
+  )
 }
 
 // ─── Preview 2D ──────────────────────────────────────────────────────────────

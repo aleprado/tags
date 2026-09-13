@@ -23,7 +23,7 @@ export class StlWriter implements TriSink {
   private n = 0
   private readonly header: string
 
-  constructor(header = 'huellitas.app tag3d v1') {
+  constructor(header = 'huellis.art tag3d v1') {
     // Varios parsers deciden ASCII-vs-binario mirando si el archivo arranca
     // con "solid", así que el header no puede empezar así.
     this.header = header.startsWith('solid') ? `# ${header}` : header
