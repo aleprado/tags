@@ -116,7 +116,9 @@ export default function PublicProfile() {
 
     const base = tag?.type === 'objeto'
       ? `Hola, encontre tu ${categoryInfo(tag?.objectCategory).label.toLowerCase()}`
-      : `Hola, encontre a ${tag?.petName ?? 'tu mascota'}`
+      : tag?.lost
+        ? `Hola, vi a ${tag?.petName ?? 'tu mascota'} que esta marcada como perdida en Huellitas`
+        : `Hola, encontre a ${tag?.petName ?? 'tu mascota'}`
 
     const wa = (extra = '') => {
       const msg = extra ? `${base}\n\n${extra}` : base
@@ -209,6 +211,7 @@ export default function PublicProfile() {
 
   const isDesktop = window.innerWidth >= 768
   const isObject = tag?.type === 'objeto'
+  const isLost = !isObject && tag?.lost
   const phone = isObject ? (tag?.contactPhone ?? tag?.ownerPhone) : tag?.ownerPhone
   const phoneNum = phone?.replace(/\s/g, '') ?? ''
   const avatarSize = isDesktop ? 180 : 132
@@ -303,6 +306,22 @@ export default function PublicProfile() {
     </div>
   )
 
+  const lostBanner = isLost && (
+    <div style={{
+      background: '#c0392b', color: '#fff',
+      padding: '10px 20px',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+      fontSize: 14, fontWeight: 700, letterSpacing: '0.02em',
+      animation: 'pulse-lost-banner 2s ease-in-out infinite',
+    }}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+      MASCOTA PERDIDA
+    </div>
+  )
+
   const locationModal = showLocationModal && (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 500,
@@ -336,6 +355,7 @@ export default function PublicProfile() {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--color-bg)', display: 'flex', flexDirection: 'column' }}>
         <HuellitasHeader />
+        {lostBanner}
         <div style={{ flex: 1, padding: '40px 48px' }}>
           <div style={{ display: 'flex', gap: 36, maxWidth: 920, margin: '0 auto', alignItems: 'flex-start' }}>
             {profileColumn}
@@ -344,6 +364,7 @@ export default function PublicProfile() {
         </div>
         <HuellitasFooter />
         {locationModal}
+        <style>{`@keyframes pulse-lost-banner { 0%,100%{opacity:1} 50%{opacity:0.85} }`}</style>
       </div>
     )
   }
@@ -351,12 +372,14 @@ export default function PublicProfile() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--color-bg)', display: 'flex', flexDirection: 'column' }}>
       <HuellitasHeader />
+      {lostBanner}
       <div style={{ flex: 1, padding: '28px 20px 40px', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         {profileColumn}
         {cards}
       </div>
       <HuellitasFooter />
       {locationModal}
+      <style>{`@keyframes pulse-lost-banner { 0%,100%{opacity:1} 50%{opacity:0.85} }`}</style>
     </div>
   )
 }

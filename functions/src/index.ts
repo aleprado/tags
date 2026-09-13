@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase-admin/app'
 import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 import { getStorage } from 'firebase-admin/storage'
 import { onCall, onRequest, HttpsError } from 'firebase-functions/v2/https'
+import { onDocumentUpdated } from 'firebase-functions/v2/firestore'
 // CORS allowed origins (browser calls only; server-to-server webhooks have no Origin).
 const ALLOWED_ORIGINS = [
   'https://huellis.art',
@@ -247,3 +248,102 @@ export const claimCode = onCall({ maxInstances: 10, cors: ALLOWED_ORIGINS }, asy
 
   return { tagId: tagRef.id }
 })
+
+// ─── onPetLost ─────────────────────────────────────────────────────────────
+
+export const onPetLost = onDocumentUpdated(
+  { document: 'tags/{tagId}', maxInstances: 5 },
+  async (event) => {
+    const before = event.data?.before?.data()
+    const after = event.data?.after?.data()
+    if (!before || !after) return
+
+    // Only trigger when lost transitions from falsy to true
+    if (before.lost || !after.lost) return
+
+    const location = after.homeLocation as { lat: number; lng: number } | undefined
+    if (!location) {
+      console.warn(`[onPetLost] Tag ${event.params.tagId} has no homeLocation, skipping`)
+      return
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const geofire = require('geofire-common') as typeof import('geofire-common')
+    const { getMessaging } = require('firebase-admin/messaging') as typeof import('firebase-admin/messaging')
+
+    const center: [number, number] = [location.lat, location.lng]
+    const radiusM = 1000
+    const bounds = geofire.geohashQueryBounds(center, radiusM)
+    const db = getFirestore()
+
+    const matchingTokens: string[] = []
+    const staleTokenIds: string[] = []
+
+    for (const [start, end] of bounds) {
+      const snap = await db.collection('subscribers')
+        .orderBy('geohash')
+        .startAt(start)
+        .endAt(end)
+        .get()
+
+      for (const doc of snap.docs) {
+        if (doc.id === after.ownerUid) continue
+        const loc = doc.data().location as { lat: number; lng: number }
+        const dist = geofire.distanceBetween([loc.lat, loc.lng], center)
+        if (dist * 1000 <= radiusM) {
+          matchingTokens.push(doc.data().fcmToken as string)
+        }
+      }
+    }
+
+    if (matchingTokens.length === 0) return
+
+    const petName = (after.petName as string) ?? 'una mascota'
+    const species = (after.species as string) ?? ''
+    const breed = (after.breed as string) ?? ''
+    const detail = breed || (species === 'perro' ? 'Perro' : species === 'gato' ? 'Gato' : '')
+    const appUrl = process.env.APP_URL ?? 'https://tags-8bcd8.web.app'
+
+    const batches: string[][] = []
+    for (let i = 0; i < matchingTokens.length; i += 500) {
+      batches.push(matchingTokens.slice(i, i + 500))
+    }
+
+    for (const tokenBatch of batches) {
+      const result = await getMessaging().sendEachForMulticast({
+        tokens: tokenBatch,
+        notification: {
+          title: `Se perdio ${petName}${detail ? ` (${detail})` : ''}`,
+          body: 'cerca de tu zona - Toca para ver info',
+          imageUrl: (after.photoUrl as string) || undefined,
+        },
+        webpush: {
+          fcmOptions: {
+            link: `${appUrl}/p/${after.code ?? event.params.tagId}`,
+          },
+        },
+      })
+
+      result.responses.forEach((resp, idx) => {
+        if (resp.error?.code === 'messaging/registration-token-not-registered' ||
+            resp.error?.code === 'messaging/invalid-registration-token') {
+          const token = tokenBatch[idx]
+          db.collection('subscribers').where('fcmToken', '==', token).get()
+            .then(snap => snap.docs.forEach(d => staleTokenIds.push(d.id)))
+            .catch(() => {})
+        }
+      })
+    }
+
+    if (staleTokenIds.length > 0) {
+      const batch = db.batch()
+      for (const id of staleTokenIds) {
+        batch.delete(db.collection('subscribers').doc(id))
+      }
+      await batch.commit()
+      console.log(`[onPetLost] Cleaned up ${staleTokenIds.length} stale subscriber tokens`)
+    }
+
+    console.log(`[onPetLost] Sent ${matchingTokens.length} notifications for tag ${event.params.tagId}`)
+  }
+)

@@ -25,11 +25,21 @@ export interface TagDoc {
   ownerPhone?: string
   photoUrl?: string
   homeLocation?: { lat: number; lng: number }
+  lost?: boolean
+  lostAt?: Timestamp
   // objeto fields
   objectCategory?: 'mochila' | 'cartera' | 'llaves' | 'indumentaria' | 'otro'
   objectDescription?: string
   rewardAmount?: number
   contactPhone?: string
+}
+
+export interface SubscriberDoc {
+  uid: string
+  fcmToken: string
+  location: { lat: number; lng: number }
+  geohash: string
+  createdAt: Timestamp
 }
 
 export interface CodeDoc {

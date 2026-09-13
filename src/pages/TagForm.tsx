@@ -8,6 +8,9 @@ import { useAuth } from '../context/AuthContext'
 import { getTag, updateTag } from '../lib/firestore'
 import AppLayout from '../layouts/AppLayout'
 import ActivationScene from '../components/ActivationScene'
+import AlertOnboarding from '../components/AlertOnboarding'
+import Switch from '../components/Switch'
+import { isNotificationSupported, subscribeToAlerts } from '../lib/notifications'
 
 const OBJECT_CATEGORIES = [
   { value: 'mochila', label: 'Mochila' },
@@ -81,29 +84,6 @@ function QRScanner({ onScan, onClose }: { onScan: (code: string) => void; onClos
   )
 }
 
-function Switch({ active, onToggle }: { active: boolean; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-label={active ? 'Desactivar' : 'Activar'}
-      style={{
-        width: 44, height: 26, borderRadius: 999, border: 'none', padding: 2,
-        cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0,
-        background: active ? 'var(--color-accent)' : 'var(--color-neutral-300)',
-        transition: 'background 0.15s',
-      }}
-    >
-      <span style={{
-        width: 20, height: 20, borderRadius: '50%', background: '#fff',
-        display: 'block', boxShadow: 'var(--shadow-sm)',
-        transform: `translateX(${active ? '18px' : '0px'})`,
-        transition: 'transform 0.15s',
-      }} />
-    </button>
-  )
-}
-
 function UploadIcon() {
   return (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -154,11 +134,14 @@ export default function TagForm() {
   const [toast, setToast] = useState('')
   const [error, setError] = useState('')
   const [showActivation, setShowActivation] = useState(false)
+  const [showOnboarding, setShowOnboarding] = useState(false)
   const savePromiseRef = useRef<Promise<void> | null>(null)
 
   // Object fields
   const [objectCategory, setObjectCategory] = useState<'mochila' | 'cartera' | 'llaves' | 'indumentaria' | 'otro'>('mochila')
   const [objectDescription, setObjectDescription] = useState('')
+  const [lost, setLost] = useState(false)
+  const [lostConfirm, setLostConfirm] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -176,6 +159,7 @@ export default function TagForm() {
       if (tag.homeLocation) setHomeLocation(tag.homeLocation)
       if (tag.objectCategory) setObjectCategory(tag.objectCategory)
       setObjectDescription(tag.objectDescription ?? '')
+      setLost(tag.lost ?? false)
       setLoading(false)
     })
   }, [id, navigate])
@@ -268,6 +252,14 @@ export default function TagForm() {
     } finally {
       setSaving(false)
     }
+  }
+
+  async function handleToggleLost() {
+    if (!id) return
+    const next = !lost
+    setLost(next)
+    setLostConfirm(false)
+    await updateTag(id, { lost: next })
   }
 
   async function handleDelete() {
@@ -472,6 +464,33 @@ export default function TagForm() {
           {toast}
         </div>
       )}
+      {lostConfirm && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 500,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 24,
+        }}>
+          <div className="card elev-md" style={{ maxWidth: 340, gap: 'var(--space-3)', textAlign: 'center', padding: 'var(--space-5)' }}>
+            <p style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>
+              Reportar mascota perdida
+            </p>
+            <p style={{ margin: 0, fontSize: 13, opacity: 0.75, lineHeight: 1.5 }}>
+              Marcar a <strong>{petName || 'tu mascota'}</strong> como perdida?
+              {homeLocation
+                ? ' Se notificara a vecinos de tu zona.'
+                : ' Para enviar alertas a vecinos, agrega la ubicacion de tu hogar.'}
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 4 }}>
+              <button type="button" className="btn btn-ghost" onClick={() => setLostConfirm(false)}>Cancelar</button>
+              <button type="button" className="btn btn-primary" style={{ background: '#c0392b' }} onClick={handleToggleLost}>
+                Reportar perdida
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSave}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 'var(--space-4)' }}>
           <button type="button" className="btn btn-ghost btn-icon" onClick={() => navigate('/app/tags')} style={{ padding: 4 }}>
@@ -549,6 +568,40 @@ export default function TagForm() {
             <Switch active={active} onToggle={() => setActive(a => !a)} />
           </div>
 
+          {isEdit && tagType === 'mascota' && (
+            <div style={{
+              padding: '12px 14px', borderRadius: 12,
+              border: lost ? '1px solid #c0392b' : '1px solid var(--color-divider)',
+              background: lost ? '#fde8e8' : undefined,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+            }}>
+              <div>
+                <span style={{ fontSize: 13, fontWeight: 600, color: lost ? '#c0392b' : undefined }}>
+                  {lost ? 'Mascota marcada como perdida' : 'Reportar mascota perdida'}
+                </span>
+                {!homeLocation && !lost && (
+                  <p style={{ margin: '4px 0 0', fontSize: 11, opacity: 0.6, lineHeight: 1.4 }}>
+                    Agrega tu ubicacion para que las alertas lleguen a tus vecinos.
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => lost ? handleToggleLost() : setLostConfirm(true)}
+                style={{
+                  padding: '6px 14px', fontSize: 12, fontWeight: 600, flexShrink: 0,
+                  color: lost ? '#c0392b' : '#fff',
+                  background: lost ? 'transparent' : '#c0392b',
+                  border: lost ? '1px solid #c0392b' : 'none',
+                  borderRadius: 999,
+                }}
+              >
+                {lost ? 'Encontrada' : 'En alerta'}
+              </button>
+            </div>
+          )}
+
           <button
             type="button"
             className="btn btn-secondary btn-block"
@@ -602,6 +655,39 @@ export default function TagForm() {
               <span style={{ fontSize: 13 }}>Tag activo</span>
               <Switch active={active} onToggle={() => setActive(a => !a)} />
             </div>
+            {isEdit && tagType === 'mascota' && (
+              <div style={{
+                padding: '12px 14px', borderRadius: 12,
+                border: lost ? '1px solid #c0392b' : '1px solid var(--color-divider)',
+                background: lost ? '#fde8e8' : undefined,
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+              }}>
+                <div>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: lost ? '#c0392b' : undefined }}>
+                    {lost ? 'Mascota marcada como perdida' : 'Reportar mascota perdida'}
+                  </span>
+                  {!homeLocation && !lost && (
+                    <p style={{ margin: '4px 0 0', fontSize: 11, opacity: 0.6, lineHeight: 1.4 }}>
+                      Agrega tu ubicacion para que las alertas lleguen a tus vecinos.
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => lost ? handleToggleLost() : setLostConfirm(true)}
+                  style={{
+                    padding: '6px 14px', fontSize: 12, fontWeight: 600, flexShrink: 0,
+                    color: lost ? '#c0392b' : '#fff',
+                    background: lost ? 'transparent' : '#c0392b',
+                    border: lost ? '1px solid #c0392b' : 'none',
+                    borderRadius: 999,
+                  }}
+                >
+                  {lost ? 'Encontrada' : 'En alerta'}
+                </button>
+              </div>
+            )}
             {actionButtons}
           </div>
         </div>
@@ -623,6 +709,32 @@ export default function TagForm() {
         petName={tagType === 'mascota' ? petName : (OBJECT_CATEGORIES.find(c => c.value === objectCategory)?.label ?? 'Objeto')}
         onDone={async () => {
           try { if (savePromiseRef.current) await savePromiseRef.current } catch { return }
+          setShowActivation(false)
+          const onboardingDone = localStorage.getItem('huellitas_alert_onboarding_done')
+          if (tagType === 'mascota' && !onboardingDone && isNotificationSupported()) {
+            setShowOnboarding(true)
+          } else {
+            navigate('/app/tags')
+          }
+        }}
+      />
+    )}
+    {showOnboarding && (
+      <AlertOnboarding
+        onSubscribe={async () => {
+          if (!user) throw new Error('No autenticado')
+          const loc = homeLocation ?? await new Promise<{ lat: number; lng: number }>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(
+              pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+              reject,
+              { timeout: 8000 },
+            )
+          })
+          await subscribeToAlerts(user.uid, loc)
+        }}
+        onDone={() => {
+          localStorage.setItem('huellitas_alert_onboarding_done', '1')
+          setShowOnboarding(false)
           navigate('/app/tags')
         }}
       />

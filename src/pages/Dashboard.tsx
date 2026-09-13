@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getUserTags, updateTag } from '../lib/firestore'
+import { isNotificationSupported, isSubscribed, subscribeToAlerts, unsubscribeFromAlerts } from '../lib/notifications'
 import type { TagDoc } from '../lib/types'
 import AppLayout from '../layouts/AppLayout'
+import Switch from '../components/Switch'
 
 function LogoutIcon() {
   return (
@@ -14,29 +16,6 @@ function LogoutIcon() {
 }
 
 type TagWithId = TagDoc & { id: string }
-
-function Switch({ active, onToggle }: { active: boolean; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-label={active ? 'Desactivar' : 'Activar'}
-      style={{
-        width: 44, height: 26, borderRadius: 999, border: 'none', padding: 2,
-        cursor: 'pointer', display: 'flex', alignItems: 'center', flexShrink: 0,
-        background: active ? 'var(--color-accent)' : 'var(--color-neutral-300)',
-        transition: 'background 0.15s',
-      }}
-    >
-      <span style={{
-        width: 20, height: 20, borderRadius: '50%', background: '#fff',
-        display: 'block', boxShadow: 'var(--shadow-sm)',
-        transform: `translateX(${active ? '18px' : '0px'})`,
-        transition: 'transform 0.15s',
-      }} />
-    </button>
-  )
-}
 
 const OBJECT_CATEGORY_ICONS: Record<string, string> = {
   mochila: '🎒', cartera: '👜', llaves: '🔑', indumentaria: '👕', otro: '📦',
@@ -66,6 +45,14 @@ function PlusIcon() {
   )
 }
 
+function BellIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+    </svg>
+  )
+}
+
 export default function Dashboard() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
@@ -76,6 +63,9 @@ export default function Dashboard() {
   }
   const [tags, setTags] = useState<TagWithId[]>([])
   const [loading, setLoading] = useState(true)
+  const [lostConfirm, setLostConfirm] = useState<TagWithId | null>(null)
+  const [alertSub, setAlertSub] = useState<'loading' | 'subscribed' | 'unsubscribed' | 'unsupported'>('loading')
+  const [alertBusy, setAlertBusy] = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -83,12 +73,66 @@ export default function Dashboard() {
       setTags(data)
       setLoading(false)
     })
+    if (!isNotificationSupported()) {
+      setAlertSub('unsupported')
+    } else {
+      isSubscribed(user.uid).then(sub => setAlertSub(sub ? 'subscribed' : 'unsubscribed'))
+    }
   }, [user])
 
   async function toggleActive(tag: TagWithId) {
     const next = !tag.active
     setTags(prev => prev.map(t => t.id === tag.id ? { ...t, active: next } : t))
     await updateTag(tag.id, { active: next })
+  }
+
+  async function toggleLost(tag: TagWithId) {
+    if (tag.lost) {
+      setTags(prev => prev.map(t => t.id === tag.id ? { ...t, lost: false } : t))
+      await updateTag(tag.id, { lost: false })
+    } else {
+      setLostConfirm(tag)
+    }
+  }
+
+  async function confirmLost() {
+    if (!lostConfirm) return
+    const tag = lostConfirm
+    setLostConfirm(null)
+    setTags(prev => prev.map(t => t.id === tag.id ? { ...t, lost: true } : t))
+    await updateTag(tag.id, { lost: true })
+  }
+
+  async function handleSubscribe() {
+    if (!user) return
+    setAlertBusy(true)
+    try {
+      const loc = tags.find(t => t.homeLocation)?.homeLocation
+      if (loc) {
+        await subscribeToAlerts(user.uid, loc)
+      } else {
+        const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8000 })
+        )
+        await subscribeToAlerts(user.uid, { lat: pos.coords.latitude, lng: pos.coords.longitude })
+      }
+      setAlertSub('subscribed')
+    } catch {
+      setAlertSub('unsubscribed')
+    } finally {
+      setAlertBusy(false)
+    }
+  }
+
+  async function handleUnsubscribe() {
+    if (!user) return
+    setAlertBusy(true)
+    try {
+      await unsubscribeFromAlerts(user.uid)
+      setAlertSub('unsubscribed')
+    } finally {
+      setAlertBusy(false)
+    }
   }
 
   function TagCard({ tag, layout }: { tag: TagWithId; layout: 'list' | 'grid' }) {
@@ -102,9 +146,21 @@ export default function Dashboard() {
           gap: isList ? 12 : 10,
           textAlign: isList ? 'left' : 'center',
           cursor: 'pointer',
+          position: 'relative',
+          borderLeft: tag.lost ? '3px solid #c0392b' : undefined,
         }}
         onClick={() => navigate(`/app/tags/${tag.id}/editar`)}
       >
+        {tag.lost && (
+          <span style={{
+            position: 'absolute', top: 6, right: 8,
+            fontSize: 10, fontWeight: 700, color: '#c0392b',
+            background: '#fde8e8', padding: '2px 8px', borderRadius: 999,
+            animation: 'pulse-lost 2s ease-in-out infinite',
+          }}>
+            PERDIDA
+          </span>
+        )}
         <div style={{
           width: isList ? 48 : 56,
           height: isList ? 48 : 56,
@@ -125,25 +181,102 @@ export default function Dashboard() {
         </div>
         <div style={{ flex: isList ? 1 : undefined, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3, alignItems: isList ? 'flex-start' : 'center' }}>
           <div className="card-title" style={{ fontSize: 15 }}>{tag.petName ?? tag.objectDescription ?? 'Sin nombre'}</div>
-          <span className={`tag ${tag.type === 'mascota' ? 'tag-accent' : 'tag-accent-2'}`}>
-            {tag.type === 'mascota' ? (tag.species === 'gato' ? 'Gato' : 'Perro') : 'Objeto'}
-          </span>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: isList ? 'flex-start' : 'center' }}>
+            <span className={`tag ${tag.type === 'mascota' ? 'tag-accent' : 'tag-accent-2'}`}>
+              {tag.type === 'mascota' ? (tag.species === 'gato' ? 'Gato' : 'Perro') : 'Objeto'}
+            </span>
+          </div>
         </div>
-        <div onClick={e => { e.stopPropagation() }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }} onClick={e => { e.stopPropagation() }}>
+          {tag.type === 'mascota' && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => toggleLost(tag)}
+              title={tag.lost ? 'Marcar como encontrada' : 'Reportar perdida'}
+              style={{
+                padding: '4px 8px', fontSize: 11, fontWeight: 600,
+                color: tag.lost ? '#c0392b' : 'var(--color-neutral-500)',
+                border: tag.lost ? '1px solid #c0392b' : '1px solid var(--color-divider)',
+                borderRadius: 999,
+              }}
+            >
+              {tag.lost ? 'Encontrada' : 'En alerta'}
+            </button>
+          )}
           <Switch active={tag.active} onToggle={() => toggleActive(tag)} />
         </div>
       </div>
     )
   }
 
+  const alertCard = alertSub !== 'loading' && (
+    <div className="card elev-sm" style={{ gap: 'var(--space-3)', marginTop: 'var(--space-4)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <BellIcon />
+        <div className="card-kicker" style={{ margin: 0 }}>Alertas de mascotas perdidas</div>
+      </div>
+      {alertSub === 'unsupported' ? (
+        <p className="card-body" style={{ fontSize: 12, opacity: 0.6 }}>
+          Las notificaciones push no estan disponibles en este navegador.
+        </p>
+      ) : alertSub === 'subscribed' ? (
+        <>
+          <p className="card-body" style={{ fontSize: 13, color: '#27ae60' }}>
+            Alertas activas — Recibiras notificaciones de mascotas perdidas en tu zona.
+          </p>
+          <button className="btn btn-ghost" style={{ alignSelf: 'flex-start', fontSize: 12 }} disabled={alertBusy} onClick={handleUnsubscribe}>
+            Desactivar alertas
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="card-body" style={{ fontSize: 13 }}>
+            Recibi alertas cuando una mascota de tu barrio se pierde para poder ayudar.
+          </p>
+          <button className="btn btn-primary" style={{ alignSelf: 'flex-start' }} disabled={alertBusy} onClick={handleSubscribe}>
+            {alertBusy ? 'Activando...' : 'Activar alertas'}
+          </button>
+        </>
+      )}
+    </div>
+  )
+
   return (
     <AppLayout>
+      {lostConfirm && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 500,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 24,
+        }}>
+          <div className="card elev-md" style={{ maxWidth: 340, gap: 'var(--space-3)', textAlign: 'center', padding: 'var(--space-5)' }}>
+            <p style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>
+              Reportar mascota perdida
+            </p>
+            <p style={{ margin: 0, fontSize: 13, opacity: 0.75, lineHeight: 1.5 }}>
+              Marcar a <strong>{lostConfirm.petName}</strong> como perdida?
+              {lostConfirm.homeLocation
+                ? ' Se notificara a vecinos de tu zona.'
+                : ' Para enviar alertas a vecinos, agrega la ubicacion de tu hogar al editar el tag.'}
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 4 }}>
+              <button className="btn btn-ghost" onClick={() => setLostConfirm(null)}>Cancelar</button>
+              <button className="btn btn-primary" style={{ background: '#c0392b' }} onClick={confirmLost}>
+                Reportar perdida
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile */}
       <div className="mobile-only" style={{ display: 'none' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-3)' }}>
           <h2 style={{ margin: 0, fontSize: 22 }}>Mis Tags</h2>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-ghost btn-icon" aria-label="Cerrar sesión" onClick={handleLogout} style={{ color: 'var(--color-neutral-500)' }}>
+            <button className="btn btn-ghost btn-icon" aria-label="Cerrar sesion" onClick={handleLogout} style={{ color: 'var(--color-neutral-500)' }}>
               <LogoutIcon />
             </button>
             <button className="btn btn-primary btn-icon" aria-label="Nuevo tag" onClick={() => navigate('/app/tags/nuevo')}>
@@ -152,7 +285,7 @@ export default function Dashboard() {
           </div>
         </div>
         {loading ? (
-          <p style={{ opacity: 0.6, fontSize: 14 }}>Cargando…</p>
+          <p style={{ opacity: 0.6, fontSize: 14 }}>Cargando...</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             {tags.map(t => <TagCard key={t.id} tag={t} layout="list" />)}
@@ -163,9 +296,10 @@ export default function Dashboard() {
         </button>
         {!loading && tags.length === 0 && (
           <p style={{ textAlign: 'center', fontSize: 13, opacity: 0.55, marginTop: 8 }}>
-            No tenés tags todavía. ¡Creá tu primero!
+            No tenes tags todavia. Crea tu primero!
           </p>
         )}
+        {alertCard}
       </div>
 
       {/* Desktop */}
@@ -177,11 +311,11 @@ export default function Dashboard() {
           </button>
         </div>
         {loading ? (
-          <p style={{ opacity: 0.6, fontSize: 14 }}>Cargando…</p>
+          <p style={{ opacity: 0.6, fontSize: 14 }}>Cargando...</p>
         ) : tags.length === 0 ? (
           <div className="card elev-sm" style={{ alignItems: 'center', textAlign: 'center', padding: 'var(--space-8)', gap: 'var(--space-3)' }}>
             <div className="card-kicker">Sin tags</div>
-            <p className="card-body">Todavía no tenés tags registrados.</p>
+            <p className="card-body">Todavia no tenes tags registrados.</p>
             <button className="btn btn-primary" onClick={() => navigate('/app/tags/nuevo')}>Crear mi primer tag</button>
           </div>
         ) : (
@@ -189,10 +323,11 @@ export default function Dashboard() {
             {tags.map(t => <TagCard key={t.id} tag={t} layout="grid" />)}
           </div>
         )}
+        {alertCard}
       </div>
 
       <p style={{ textAlign: 'center', fontSize: 11, opacity: 0.55, marginTop: 'var(--space-4)' }}>
-        Tocá un tag para editarlo
+        Toca un tag para editarlo
       </p>
 
       <style>{`
@@ -203,6 +338,10 @@ export default function Dashboard() {
         @media (min-width: 768px) {
           .mobile-only { display: none !important; }
           .desktop-only { display: block !important; }
+        }
+        @keyframes pulse-lost {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
         }
       `}</style>
     </AppLayout>

@@ -2,6 +2,7 @@ import { initializeApp, type FirebaseApp } from 'firebase/app'
 import { getAuth, type Auth } from 'firebase/auth'
 import { getFirestore, type Firestore } from 'firebase/firestore'
 import { getStorage, type FirebaseStorage } from 'firebase/storage'
+import { getMessaging, type Messaging } from 'firebase/messaging'
 
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -29,3 +30,11 @@ if (isConfigured) {
 export const auth = _auth!
 export const db = _db!
 export const storage = _storage!
+
+let _messaging: Messaging | null = null
+export function messaging(): Messaging {
+  if (!_messaging && _app) {
+    _messaging = getMessaging(_app)
+  }
+  return _messaging!
+}
