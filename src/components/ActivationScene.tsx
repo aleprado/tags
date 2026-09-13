@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useRafTime } from '../hooks/useRafTime'
+import { playDoubleBark } from '../lib/bark'
 
 const C_ACCENT = '#c67139'
 const C_ACCENT_DARK = '#8f5027'
@@ -66,8 +67,13 @@ interface ActivationSceneProps {
 export default function ActivationScene({ petName, onDone }: ActivationSceneProps) {
   const T = useRafTime()
   const doneCalled = useRef(false)
+  const barkPlayed = useRef(false)
 
   useEffect(() => {
+    if (T >= CUES.Confirmado && !barkPlayed.current) {
+      barkPlayed.current = true
+      playDoubleBark()
+    }
     if (T >= TOTAL && !doneCalled.current) {
       doneCalled.current = true
       onDone()

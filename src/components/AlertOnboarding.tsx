@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useRafTime } from '../hooks/useRafTime'
+import { playBark } from '../lib/bark'
 
 const C_ACCENT = '#c67139'
 const C_ACCENT2 = '#7a8a5e'
@@ -67,6 +68,7 @@ export default function AlertOnboarding({ onDone, onSubscribe }: Props) {
     setSubError('')
     try {
       await onSubscribe()
+      playBark()
       setStep(3)
     } catch {
       setSubError('No se pudieron activar las alertas. Podes intentarlo luego desde tu panel.')

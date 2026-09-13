@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getUserTags, updateTag } from '../lib/firestore'
-import { isNotificationSupported, isSubscribed, subscribeToAlerts, unsubscribeFromAlerts } from '../lib/notifications'
+import { isNotificationSupported, isSubscribed, subscribeToAlerts, unsubscribeFromAlerts, onForegroundMessage } from '../lib/notifications'
+import { playAlertBark } from '../lib/bark'
 import type { TagDoc } from '../lib/types'
 import AppLayout from '../layouts/AppLayout'
 import Switch from '../components/Switch'
@@ -13,6 +14,13 @@ function LogoutIcon() {
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
     </svg>
   )
+}
+
+function isIosSafari(): boolean {
+  const ua = navigator.userAgent
+  const isIos = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  const isStandalone = ('standalone' in navigator) && (navigator as { standalone?: boolean }).standalone
+  return isIos && !isStandalone
 }
 
 type TagWithId = TagDoc & { id: string }
@@ -66,6 +74,7 @@ export default function Dashboard() {
   const [lostConfirm, setLostConfirm] = useState<TagWithId | null>(null)
   const [alertSub, setAlertSub] = useState<'loading' | 'subscribed' | 'unsubscribed' | 'unsupported'>('loading')
   const [alertBusy, setAlertBusy] = useState(false)
+  const [fgToast, setFgToast] = useState<{ title?: string; body?: string } | null>(null)
 
   useEffect(() => {
     if (!user) return
@@ -79,6 +88,16 @@ export default function Dashboard() {
       isSubscribed(user.uid).then(sub => setAlertSub(sub ? 'subscribed' : 'unsubscribed'))
     }
   }, [user])
+
+  useEffect(() => {
+    if (alertSub !== 'subscribed') return
+    const unsub = onForegroundMessage((msg) => {
+      playAlertBark()
+      setFgToast(msg)
+      setTimeout(() => setFgToast(null), 6000)
+    })
+    return unsub
+  }, [alertSub])
 
   async function toggleActive(tag: TagWithId) {
     const next = !tag.active
@@ -217,9 +236,22 @@ export default function Dashboard() {
         <div className="card-kicker" style={{ margin: 0 }}>Alertas de mascotas perdidas</div>
       </div>
       {alertSub === 'unsupported' ? (
-        <p className="card-body" style={{ fontSize: 12, opacity: 0.6 }}>
-          Las notificaciones push no estan disponibles en este navegador.
-        </p>
+        isIosSafari() ? (
+          <div className="card-body" style={{ fontSize: 12 }}>
+            <p style={{ margin: '0 0 8px', opacity: 0.7 }}>
+              Para recibir alertas en iPhone/iPad, agrega Huellitas a tu pantalla de inicio:
+            </p>
+            <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12, opacity: 0.8, lineHeight: 1.8 }}>
+              <li>Toca el boton <strong>Compartir</strong> (cuadrado con flecha)</li>
+              <li>Selecciona <strong>"Agregar a pantalla de inicio"</strong></li>
+              <li>Abri Huellitas desde el icono nuevo</li>
+            </ol>
+          </div>
+        ) : (
+          <p className="card-body" style={{ fontSize: 12, opacity: 0.6 }}>
+            Las notificaciones push no estan disponibles en este navegador.
+          </p>
+        )
       ) : alertSub === 'subscribed' ? (
         <>
           <p className="card-body" style={{ fontSize: 13, color: '#27ae60' }}>
@@ -244,6 +276,23 @@ export default function Dashboard() {
 
   return (
     <AppLayout>
+      {fgToast && (
+        <div style={{
+          position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)',
+          background: '#1a1a18', color: '#fff', padding: '12px 20px', borderRadius: 16,
+          zIndex: 700, maxWidth: 360, width: 'calc(100% - 32px)',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+          display: 'flex', alignItems: 'center', gap: 10,
+          animation: 'slide-in-toast 0.3s ease-out',
+        }}>
+          <span style={{ fontSize: 22 }}>🐾</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {fgToast.title && <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3 }}>{fgToast.title}</div>}
+            {fgToast.body && <div style={{ fontSize: 12, opacity: 0.75, marginTop: 2 }}>{fgToast.body}</div>}
+          </div>
+          <button onClick={() => setFgToast(null)} style={{ background: 'none', border: 'none', color: '#fff', opacity: 0.5, cursor: 'pointer', fontSize: 16, padding: 4 }}>✕</button>
+        </div>
+      )}
       {lostConfirm && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 500,
@@ -342,6 +391,10 @@ export default function Dashboard() {
         @keyframes pulse-lost {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.5; }
+        }
+        @keyframes slide-in-toast {
+          from { transform: translateX(-50%) translateY(-20px); opacity: 0; }
+          to   { transform: translateX(-50%) translateY(0); opacity: 1; }
         }
       `}</style>
     </AppLayout>
