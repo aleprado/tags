@@ -1,5 +1,5 @@
 import { getToken, onMessage } from 'firebase/messaging'
-import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove, serverTimestamp } from 'firebase/firestore'
 import { geohashForLocation } from 'geofire-common'
 import { db, messaging } from './firebase'
 
@@ -16,6 +16,16 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
   return Notification.requestPermission()
 }
 
+async function getFcmToken(): Promise<string> {
+  const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js')
+  const token = await getToken(messaging(), {
+    vapidKey: VAPID_KEY,
+    serviceWorkerRegistration: swReg,
+  })
+  if (!token) throw new Error('No se pudo obtener el token de notificaciones')
+  return token
+}
+
 export async function subscribeToAlerts(
   uid: string,
   location: { lat: number; lng: number },
@@ -25,27 +35,55 @@ export async function subscribeToAlerts(
     throw new Error('Permiso de notificaciones denegado')
   }
 
-  const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js')
-  const token = await getToken(messaging(), {
-    vapidKey: VAPID_KEY,
-    serviceWorkerRegistration: swReg,
-  })
-
-  if (!token) throw new Error('No se pudo obtener el token de notificaciones')
-
+  const token = await getFcmToken()
   const hash = geohashForLocation([location.lat, location.lng])
+  const ref = doc(db, 'subscribers', uid)
 
-  await setDoc(doc(db, 'subscribers', uid), {
+  await setDoc(ref, {
     uid,
-    fcmToken: token,
+    tokens: arrayUnion(token),
     location,
     geohash: hash,
-    createdAt: serverTimestamp(),
-  })
+    updatedAt: serverTimestamp(),
+  }, { merge: true })
+}
+
+export async function ensureDeviceToken(uid: string): Promise<boolean> {
+  if (!isNotificationSupported()) return false
+  if (Notification.permission !== 'granted') return false
+
+  try {
+    const token = await getFcmToken()
+    const ref = doc(db, 'subscribers', uid)
+    const snap = await getDoc(ref)
+    if (!snap.exists()) return false
+
+    const tokens: string[] = snap.data().tokens ?? []
+    if (tokens.includes(token)) return true
+
+    await updateDoc(ref, { tokens: arrayUnion(token), updatedAt: serverTimestamp() })
+    return true
+  } catch {
+    return false
+  }
 }
 
 export async function unsubscribeFromAlerts(uid: string): Promise<void> {
-  await deleteDoc(doc(db, 'subscribers', uid))
+  try {
+    const token = await getFcmToken()
+    const ref = doc(db, 'subscribers', uid)
+    const snap = await getDoc(ref)
+    if (!snap.exists()) return
+
+    const tokens: string[] = snap.data().tokens ?? []
+    if (tokens.length <= 1) {
+      await deleteDoc(ref)
+    } else {
+      await updateDoc(ref, { tokens: arrayRemove(token), updatedAt: serverTimestamp() })
+    }
+  } catch {
+    await deleteDoc(doc(db, 'subscribers', uid))
+  }
 }
 
 export async function isSubscribed(uid: string): Promise<boolean> {

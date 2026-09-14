@@ -13,16 +13,35 @@ firebase.initializeApp({
 const messaging = firebase.messaging()
 
 messaging.onBackgroundMessage((payload) => {
-  const data = payload.notification ?? payload.data ?? {}
-  self.registration.showNotification(data.title ?? 'Huellitas', {
-    body: data.body ?? '',
-    icon: data.icon ?? '/paw.svg',
-    data: { url: data.click_action ?? '/' },
+  const n = payload.notification ?? {}
+  const d = payload.data ?? {}
+  const title = n.title || d.title || 'Huellitas'
+  const body = n.body || d.body || ''
+  const icon = n.icon || d.icon || '/paw.svg'
+  const image = n.image || d.image || undefined
+  const link = payload.fcmOptions?.link || d.link || '/'
+
+  return self.registration.showNotification(title, {
+    body,
+    icon,
+    image,
+    data: { url: link },
+    badge: '/paw.svg',
+    requireInteraction: true,
   })
 })
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   const url = event.notification.data?.url ?? '/'
-  event.waitUntil(clients.openWindow(url))
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        if (client.url.includes(url) && 'focus' in client) {
+          return client.focus()
+        }
+      }
+      return clients.openWindow(url)
+    })
+  )
 })

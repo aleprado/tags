@@ -276,8 +276,10 @@ export const onPetLost = onDocumentUpdated(
     const bounds = geofire.geohashQueryBounds(center, radiusM)
     const db = getFirestore()
 
-    const matchingTokens: string[] = []
-    const staleTokenIds: string[] = []
+    const tokenOwnerMap: { token: string; subId: string }[] = []
+    const staleEntries: string[] = []
+
+    console.log(`[onPetLost] Tag ${event.params.tagId} lost=true, center=[${center}], bounds=${bounds.length} ranges`)
 
     for (const [start, end] of bounds) {
       const snap = await db.collection('subscribers')
@@ -286,17 +288,31 @@ export const onPetLost = onDocumentUpdated(
         .endAt(end)
         .get()
 
+      console.log(`[onPetLost] Geohash range [${start}, ${end}]: ${snap.docs.length} subscribers`)
+
       for (const doc of snap.docs) {
-        if (doc.id === after.ownerUid) continue
-        const loc = doc.data().location as { lat: number; lng: number }
+        const data = doc.data()
+        const loc = data.location as { lat: number; lng: number }
         const dist = geofire.distanceBetween([loc.lat, loc.lng], center)
-        if (dist * 1000 <= radiusM) {
-          matchingTokens.push(doc.data().fcmToken as string)
+        const distM = dist * 1000
+        const isOwner = doc.id === after.ownerUid
+        const tokens: string[] = data.tokens ?? (data.fcmToken ? [data.fcmToken] : [])
+        console.log(`[onPetLost]   sub=${doc.id} dist=${distM.toFixed(0)}m owner=${isOwner} tokens=${tokens.length}`)
+        if (isOwner) continue
+        if (distM <= radiusM) {
+          for (const t of tokens) {
+            tokenOwnerMap.push({ token: t, subId: doc.id })
+          }
         }
       }
     }
 
-    if (matchingTokens.length === 0) return
+    if (tokenOwnerMap.length === 0) {
+      console.log('[onPetLost] No matching tokens within radius, skipping send')
+      return
+    }
+
+    const matchingTokens = tokenOwnerMap.map(t => t.token)
 
     const petName = (after.petName as string) ?? 'una mascota'
     const species = (after.species as string) ?? ''
@@ -324,24 +340,37 @@ export const onPetLost = onDocumentUpdated(
         },
       })
 
+      const successes = result.responses.filter(r => r.success).length
+      const failures = result.responses.filter(r => !r.success)
+      console.log(`[onPetLost] Batch: ${successes} ok, ${failures.length} failed`)
+      failures.forEach((resp, i) => {
+        console.warn(`[onPetLost] FCM error: ${resp.error?.code} — ${resp.error?.message}`)
+      })
+
       result.responses.forEach((resp, idx) => {
         if (resp.error?.code === 'messaging/registration-token-not-registered' ||
             resp.error?.code === 'messaging/invalid-registration-token') {
-          const token = tokenBatch[idx]
-          db.collection('subscribers').where('fcmToken', '==', token).get()
-            .then(snap => snap.docs.forEach(d => staleTokenIds.push(d.id)))
-            .catch(() => {})
+          staleEntries.push(tokenBatch[idx])
         }
       })
     }
 
-    if (staleTokenIds.length > 0) {
-      const batch = db.batch()
-      for (const id of staleTokenIds) {
-        batch.delete(db.collection('subscribers').doc(id))
+    if (staleEntries.length > 0) {
+      const { FieldValue: FV } = require('firebase-admin/firestore') as typeof import('firebase-admin/firestore')
+      const byOwner = new Map<string, string[]>()
+      for (const token of staleEntries) {
+        const entry = tokenOwnerMap.find(t => t.token === token)
+        if (!entry) continue
+        const list = byOwner.get(entry.subId) ?? []
+        list.push(token)
+        byOwner.set(entry.subId, list)
       }
-      await batch.commit()
-      console.log(`[onPetLost] Cleaned up ${staleTokenIds.length} stale subscriber tokens`)
+      for (const [subId, tokens] of byOwner) {
+        await db.collection('subscribers').doc(subId).update({
+          tokens: FV.arrayRemove(...tokens),
+        })
+      }
+      console.log(`[onPetLost] Removed ${staleEntries.length} stale tokens from ${byOwner.size} subscribers`)
     }
 
     console.log(`[onPetLost] Sent ${matchingTokens.length} notifications for tag ${event.params.tagId}`)

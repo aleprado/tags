@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { getUserTags, updateTag } from '../lib/firestore'
-import { isNotificationSupported, isSubscribed, subscribeToAlerts, unsubscribeFromAlerts, onForegroundMessage } from '../lib/notifications'
+import { isNotificationSupported, isSubscribed, subscribeToAlerts, unsubscribeFromAlerts, ensureDeviceToken, onForegroundMessage } from '../lib/notifications'
 import { playAlertBark } from '../lib/bark'
 import type { TagDoc } from '../lib/types'
 import AppLayout from '../layouts/AppLayout'
@@ -73,7 +73,7 @@ export default function Dashboard() {
   const [tags, setTags] = useState<TagWithId[]>([])
   const [loading, setLoading] = useState(true)
   const [lostConfirm, setLostConfirm] = useState<TagWithId | null>(null)
-  const [alertSub, setAlertSub] = useState<'loading' | 'subscribed' | 'unsubscribed' | 'unsupported' | 'denied'>('loading')
+  const [alertSub, setAlertSub] = useState<'loading' | 'subscribed' | 'unsubscribed' | 'unsupported' | 'denied' | 'needs_device'>('loading')
   const [alertBusy, setAlertBusy] = useState(false)
   const [fgToast, setFgToast] = useState<{ title?: string; body?: string } | null>(null)
 
@@ -89,7 +89,15 @@ export default function Dashboard() {
       setAlertSub('denied')
     } else {
       isSubscribed(user.uid)
-        .then(sub => setAlertSub(sub ? 'subscribed' : 'unsubscribed'))
+        .then(async (sub) => {
+          if (!sub) { setAlertSub('unsubscribed'); return }
+          if (Notification.permission === 'granted') {
+            await ensureDeviceToken(user.uid)
+            setAlertSub('subscribed')
+          } else {
+            setAlertSub('needs_device')
+          }
+        })
         .catch(() => setAlertSub('unsubscribed'))
     }
   }, [user])
@@ -281,6 +289,15 @@ export default function Dashboard() {
             Para activarlas, hace click en el candado (o icono de ajustes) en la barra de direcciones, busca "Notificaciones" y cambialo a "Permitir". Despues recarga la pagina.
           </p>
         </div>
+      ) : alertSub === 'needs_device' ? (
+        <>
+          <p className="card-body" style={{ fontSize: 13 }}>
+            Tenes alertas activas en otro dispositivo. Activalas tambien aca para no perderte ninguna.
+          </p>
+          <button className="btn btn-primary" style={{ alignSelf: 'flex-start' }} disabled={alertBusy} onClick={handleSubscribe}>
+            {alertBusy ? 'Activando...' : 'Activar en este dispositivo'}
+          </button>
+        </>
       ) : alertSub === 'subscribed' ? (
         <>
           <p className="card-body" style={{ fontSize: 13, color: '#27ae60' }}>
