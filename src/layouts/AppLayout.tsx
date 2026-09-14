@@ -45,7 +45,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   } as React.CSSProperties)
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div className="app-shell" style={{ display: 'flex', minHeight: '100vh' }}>
       {/* Sidebar — desktop only */}
       <aside className="app-sidebar" style={{
         width: 210,
@@ -93,15 +93,37 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      {/* Main content */}
-      <main className="app-main" style={{ flex: 1, overflowY: 'auto', padding: '36px 44px', maxWidth: '100%' }}>
-        {children}
-      </main>
+      {/* Mobile header + main column */}
+      <div className="app-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        {/* Mobile header */}
+        <header className="app-mobile-header" style={{
+          display: 'none',
+          alignItems: 'center',
+          gap: 8,
+          padding: '12px 18px',
+          borderBottom: '1px solid var(--color-divider)',
+          background: 'var(--color-surface)',
+          position: 'sticky',
+          top: 0,
+          zIndex: 50,
+        }}>
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--color-accent-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <PawIcon />
+          </div>
+          <span style={{ fontFamily: 'var(--font-heading)', fontSize: 15 }}>Huellitas</span>
+        </header>
+
+        {/* Main content */}
+        <main className="app-main" style={{ flex: 1, overflowY: 'auto', padding: '36px 44px' }}>
+          {children}
+        </main>
+      </div>
 
       <style>{`
         @media (max-width: 767px) {
           .app-sidebar { display: none !important; }
-          .app-main { padding: 24px 18px 32px !important; }
+          .app-mobile-header { display: flex !important; }
+          .app-main { padding: 20px 18px 32px !important; }
         }
       `}</style>
     </div>

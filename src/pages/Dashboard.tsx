@@ -7,6 +7,7 @@ import { playAlertBark } from '../lib/bark'
 import type { TagDoc } from '../lib/types'
 import AppLayout from '../layouts/AppLayout'
 import Switch from '../components/Switch'
+import LostConfirmModal from '../components/LostConfirmModal'
 
 function LogoutIcon() {
   return (
@@ -327,30 +328,12 @@ export default function Dashboard() {
         </div>
       )}
       {lostConfirm && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 500,
-          background: 'rgba(0,0,0,0.5)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: 24,
-        }}>
-          <div className="card elev-md" style={{ maxWidth: 340, gap: 'var(--space-3)', textAlign: 'center', padding: 'var(--space-5)' }}>
-            <p style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>
-              Reportar mascota perdida
-            </p>
-            <p style={{ margin: 0, fontSize: 13, opacity: 0.75, lineHeight: 1.5 }}>
-              Marcar a <strong>{lostConfirm.petName}</strong> como perdida?
-              {lostConfirm.homeLocation
-                ? ' Se notificara a vecinos de tu zona.'
-                : ' Para enviar alertas a vecinos, agrega la ubicacion de tu hogar al editar el tag.'}
-            </p>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 4 }}>
-              <button className="btn btn-ghost" onClick={() => setLostConfirm(null)}>Cancelar</button>
-              <button className="btn btn-primary" style={{ background: '#c0392b' }} onClick={confirmLost}>
-                Reportar perdida
-              </button>
-            </div>
-          </div>
-        </div>
+        <LostConfirmModal
+          petName={lostConfirm.petName ?? 'tu mascota'}
+          hasLocation={!!lostConfirm.homeLocation}
+          onConfirm={confirmLost}
+          onCancel={() => setLostConfirm(null)}
+        />
       )}
 
       {/* Mobile */}

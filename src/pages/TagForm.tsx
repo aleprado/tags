@@ -10,6 +10,7 @@ import AppLayout from '../layouts/AppLayout'
 import ActivationScene from '../components/ActivationScene'
 import AlertOnboarding from '../components/AlertOnboarding'
 import Switch from '../components/Switch'
+import LostConfirmModal from '../components/LostConfirmModal'
 import { isNotificationSupported, subscribeToAlerts } from '../lib/notifications'
 
 const OBJECT_CATEGORIES = [
@@ -465,30 +466,12 @@ export default function TagForm() {
         </div>
       )}
       {lostConfirm && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 500,
-          background: 'rgba(0,0,0,0.5)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: 24,
-        }}>
-          <div className="card elev-md" style={{ maxWidth: 340, gap: 'var(--space-3)', textAlign: 'center', padding: 'var(--space-5)' }}>
-            <p style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>
-              Reportar mascota perdida
-            </p>
-            <p style={{ margin: 0, fontSize: 13, opacity: 0.75, lineHeight: 1.5 }}>
-              Marcar a <strong>{petName || 'tu mascota'}</strong> como perdida?
-              {homeLocation
-                ? ' Se notificara a vecinos de tu zona.'
-                : ' Para enviar alertas a vecinos, agrega la ubicacion de tu hogar.'}
-            </p>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 4 }}>
-              <button type="button" className="btn btn-ghost" onClick={() => setLostConfirm(false)}>Cancelar</button>
-              <button type="button" className="btn btn-primary" style={{ background: '#c0392b' }} onClick={handleToggleLost}>
-                Reportar perdida
-              </button>
-            </div>
-          </div>
-        </div>
+        <LostConfirmModal
+          petName={petName || 'tu mascota'}
+          hasLocation={!!homeLocation}
+          onConfirm={handleToggleLost}
+          onCancel={() => setLostConfirm(false)}
+        />
       )}
 
       <form onSubmit={handleSave}>
