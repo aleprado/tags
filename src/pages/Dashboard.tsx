@@ -72,7 +72,7 @@ export default function Dashboard() {
   const [tags, setTags] = useState<TagWithId[]>([])
   const [loading, setLoading] = useState(true)
   const [lostConfirm, setLostConfirm] = useState<TagWithId | null>(null)
-  const [alertSub, setAlertSub] = useState<'loading' | 'subscribed' | 'unsubscribed' | 'unsupported'>('loading')
+  const [alertSub, setAlertSub] = useState<'loading' | 'subscribed' | 'unsubscribed' | 'unsupported' | 'denied'>('loading')
   const [alertBusy, setAlertBusy] = useState(false)
   const [fgToast, setFgToast] = useState<{ title?: string; body?: string } | null>(null)
 
@@ -84,6 +84,8 @@ export default function Dashboard() {
     })
     if (!isNotificationSupported()) {
       setAlertSub('unsupported')
+    } else if (Notification.permission === 'denied') {
+      setAlertSub('denied')
     } else {
       isSubscribed(user.uid).then(sub => setAlertSub(sub ? 'subscribed' : 'unsubscribed'))
     }
@@ -136,8 +138,12 @@ export default function Dashboard() {
         await subscribeToAlerts(user.uid, { lat: pos.coords.latitude, lng: pos.coords.longitude })
       }
       setAlertSub('subscribed')
-    } catch {
-      setAlertSub('unsubscribed')
+    } catch (err) {
+      if (Notification.permission === 'denied') {
+        setAlertSub('denied')
+      } else {
+        setAlertSub('unsubscribed')
+      }
     } finally {
       setAlertBusy(false)
     }
@@ -151,6 +157,17 @@ export default function Dashboard() {
       setAlertSub('unsubscribed')
     } finally {
       setAlertBusy(false)
+    }
+  }
+
+  function handleTestAlert() {
+    playAlertBark()
+    const title = 'Se perdio Luna (Perro)'
+    const body = 'cerca de tu zona - Toca para ver info'
+    setFgToast({ title, body })
+    setTimeout(() => setFgToast(null), 6000)
+    if (Notification.permission === 'granted') {
+      new Notification(title, { body, icon: '/paw.svg' })
     }
   }
 
@@ -252,14 +269,28 @@ export default function Dashboard() {
             Las notificaciones push no estan disponibles en este navegador.
           </p>
         )
+      ) : alertSub === 'denied' ? (
+        <div className="card-body" style={{ fontSize: 12 }}>
+          <p style={{ margin: '0 0 8px', color: '#c0392b' }}>
+            Las notificaciones estan bloqueadas en tu navegador.
+          </p>
+          <p style={{ margin: 0, opacity: 0.7, lineHeight: 1.6 }}>
+            Para activarlas, hace click en el candado (o icono de ajustes) en la barra de direcciones, busca "Notificaciones" y cambialo a "Permitir". Despues recarga la pagina.
+          </p>
+        </div>
       ) : alertSub === 'subscribed' ? (
         <>
           <p className="card-body" style={{ fontSize: 13, color: '#27ae60' }}>
             Alertas activas — Recibiras notificaciones de mascotas perdidas en tu zona.
           </p>
-          <button className="btn btn-ghost" style={{ alignSelf: 'flex-start', fontSize: 12 }} disabled={alertBusy} onClick={handleUnsubscribe}>
-            Desactivar alertas
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={handleTestAlert}>
+              Probar alerta
+            </button>
+            <button className="btn btn-ghost" style={{ fontSize: 12 }} disabled={alertBusy} onClick={handleUnsubscribe}>
+              Desactivar alertas
+            </button>
+          </div>
         </>
       ) : (
         <>

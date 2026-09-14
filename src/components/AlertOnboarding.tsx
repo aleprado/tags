@@ -71,7 +71,10 @@ export default function AlertOnboarding({ onDone, onSubscribe }: Props) {
       playBark()
       setStep(3)
     } catch {
-      setSubError('No se pudieron activar las alertas. Podes intentarlo luego desde tu panel.')
+      const denied = typeof Notification !== 'undefined' && Notification.permission === 'denied'
+      setSubError(denied
+        ? 'Las notificaciones estan bloqueadas. Habilitalas desde el candado en la barra de direcciones y recarga la pagina.'
+        : 'No se pudieron activar las alertas. Podes intentarlo luego desde tu panel.')
       setBusy(false)
     }
   }
