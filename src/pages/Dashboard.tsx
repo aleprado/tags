@@ -87,7 +87,9 @@ export default function Dashboard() {
     } else if (Notification.permission === 'denied') {
       setAlertSub('denied')
     } else {
-      isSubscribed(user.uid).then(sub => setAlertSub(sub ? 'subscribed' : 'unsubscribed'))
+      isSubscribed(user.uid)
+        .then(sub => setAlertSub(sub ? 'subscribed' : 'unsubscribed'))
+        .catch(() => setAlertSub('unsubscribed'))
     }
   }, [user])
 
