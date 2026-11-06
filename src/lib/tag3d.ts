@@ -1,5 +1,5 @@
 /**
- * Chapita QR tipo gota para impresión 3D (Bambu Lab A1 mini).
+ * Chapita QR tipo gota, hueso o pasador de collar para impresión 3D (Bambu Lab A1 mini).
  *
  * El mesh final NO es manifold (las cajas se hunden en la losa a propósito).
  * Los slicers libslic3r (Bambu Studio, Orca, PrusaSlicer) lo rebanan bien igual.
@@ -7,15 +7,28 @@
 
 import { StlWriter, type TriSink } from './stl'
 import {
-  dropOutline, addSlabWithHole, addGridRelief, addEllipseRelief, greedyRects,
+  dropOutline, boneOutline, boneBodyOutline, roundedRectOutline,
+  addSlabWithHole, addCollarSlideSlab, addBorderRidge,
+  addGridRelief, addEllipseRelief, addDebossedText, greedyRects,
   type Vec2, type Rect,
 } from './mesh'
 import { createQrGrid, codeUrl, checkQrOrientation, type Ecl, type QrGrid } from './qr'
 
+export type Tag3DShape = 'drop' | 'bone' | 'collar_slide'
+export type CollarPreset = 'small' | 'medium' | 'large'
+
 export interface Tag3DParams {
+  shape: Tag3DShape
+  collarPreset?: CollarPreset
   plateW: number
   plateH: number
   topR: number
+  boneLobeR?: number
+  slotW?: number
+  slotH?: number
+  slotMargin?: number
+  channelDepth?: number
+  cornerR?: number
   baseThickness: number
   holeD: number
   holeMarginTop: number
@@ -32,12 +45,76 @@ export interface Tag3DParams {
   pitchY: number
   interleave: boolean
   bedSize: number
+  debossBackText: boolean
+  backText: string
+  debossDepth: number
+}
+
+export const COLLAR_SLIDE_PRESETS: Record<CollarPreset, {
+  name: string
+  collarDesc: string
+  plateW: number
+  plateH: number
+  slotW: number
+  slotH: number
+  slotMargin: number
+  channelDepth: number
+  cornerR: number
+  pitchX: number
+  pitchY: number
+}> = {
+  small: {
+    name: '🐱 Pequeño (Gatos)',
+    collarDesc: 'Collar de 10 mm (cinta fina 1.2–2 mm)',
+    plateW: 24,
+    plateH: 40,
+    slotW: 12,
+    slotH: 2.8,
+    slotMargin: 2.8,
+    channelDepth: 1.2,
+    cornerR: 2.5,
+    pitchX: 27,
+    pitchY: 44,
+  },
+  medium: {
+    name: '🐶 Mediano (Perros chicos / medianos)',
+    collarDesc: 'Collar de 15 mm (cinta estándar 2–3 mm)',
+    plateW: 32,
+    plateH: 42,
+    slotW: 17,
+    slotH: 3.8,
+    slotMargin: 3.0,
+    channelDepth: 1.6,
+    cornerR: 3.0,
+    pitchX: 35,
+    pitchY: 46,
+  },
+  large: {
+    name: '🐕 Grande (Perros grandes)',
+    collarDesc: 'Collar de 25 mm (cinta gruesa / reforzada 3.5–5 mm)',
+    plateW: 38,
+    plateH: 48,
+    slotW: 27,
+    slotH: 5.5,
+    slotMargin: 3.2,
+    channelDepth: 2.0,
+    cornerR: 3.5,
+    pitchX: 42,
+    pitchY: 52,
+  },
 }
 
 export const DEFAULT_TAG3D: Tag3DParams = {
+  shape: 'drop',
   plateW: 40,
   plateH: 55,
   topR: 5,
+  boneLobeR: 8,
+  slotW: 12,
+  slotH: 2.8,
+  slotMargin: 2.8,
+  channelDepth: 1.4,
+  cornerR: 2.5,
   baseThickness: 5,
   holeD: 3.5,
   holeMarginTop: 2.6,
@@ -54,6 +131,9 @@ export const DEFAULT_TAG3D: Tag3DParams = {
   pitchY: 58,
   interleave: false,
   bedSize: 180,
+  debossBackText: true,
+  backText: 'huellis.art',
+  debossDepth: 0.6,
 }
 
 export const MIN_MODULE_MM = 0.85
@@ -67,12 +147,16 @@ export interface Tag3DLayout {
   quietMm: number
   qrLeft: number
   qrBottom: number
-  /** Centro Y del círculo inferior (relativo al centro de la chapa) */
   qrCenterY: number
+  holeCx?: number
   holeCy: number
   holeR: number
   sideMarginMm: number
   pawCy: number
+  slotTopY?: number
+  slotBotY?: number
+  slotW?: number
+  slotH?: number
   platesPerSheet: number
   sheetSpanX: number
   sheetSpanY: number
@@ -81,11 +165,122 @@ export interface Tag3DLayout {
 
 export function computeLayout(p: Tag3DParams, qrModules: number): Tag3DLayout {
   const issues: Tag3DIssue[] = []
+
+  // 1. Silueta Pasador de Collar
+  if (p.shape === 'collar_slide') {
+    const sw = p.slotW ?? 12
+    const sh = p.slotH ?? 2.8
+    const sm = p.slotMargin ?? 2.8
+
+    const topSlotCy = p.plateH / 2 - sm - sh / 2
+    const botSlotCy = -(p.plateH / 2 - sm - sh / 2)
+
+    // Espacio vertical entre los bordes interiores de las ranuras
+    const availH = topSlotCy - sh / 2 - (botSlotCy + sh / 2) - 1.5
+    const availW = p.plateW - 3
+    const availSquare = Math.min(availW, availH)
+
+    const qrSize = Math.max(14, (availSquare * qrModules) / (qrModules + 2 * p.quietModules))
+    const moduleMm = qrSize / qrModules
+    const quietMm = p.quietModules * moduleMm
+
+    const xSpan = (p.cols - 1) * p.pitchX + p.plateW
+    const ySpan = (p.rows - 1) * p.pitchY + p.plateH
+
+    if (p.plateW < 18 || p.plateH < 28) {
+      issues.push({ level: 'error', msg: 'Dimensiones del pasador demasiado chicas.' })
+    }
+    if (sw >= p.plateW - 3) {
+      issues.push({ level: 'error', msg: 'La ranura es demasiado ancha para el ancho de la chapa.' })
+    }
+    if (p.sinkEps >= p.baseThickness) {
+      issues.push({ level: 'error', msg: 'El relieve atraviesa la base: bajá el hundido o subí el espesor.' })
+    }
+    if (p.pitchX < p.plateW || p.pitchY < p.plateH * 0.9) {
+      issues.push({ level: 'error', msg: 'El paso de la grilla es chico: las chapitas se superpondrían.' })
+    }
+    if (Math.max(xSpan, ySpan) > p.bedSize) {
+      issues.push({ level: 'error', msg: `La placa (${xSpan.toFixed(0)}×${ySpan.toFixed(0)}mm) no entra en la cama de ${p.bedSize}mm.` })
+    }
+    if (moduleMm < MIN_MODULE_MM) {
+      issues.push({ level: 'warn', msg: `Módulo de ${moduleMm.toFixed(3)}mm (mínimo ${MIN_MODULE_MM}): aumentá el ancho o alto del pasador.` })
+    }
+
+    return {
+      qrModules, qrSize, moduleMm, quietMm,
+      qrLeft: -qrSize / 2,
+      qrBottom: -qrSize / 2,
+      qrCenterY: 0,
+      holeCy: 0, holeR: 0,
+      sideMarginMm: (p.plateW - qrSize) / 2,
+      pawCy: 0,
+      slotTopY: topSlotCy,
+      slotBotY: botSlotCy,
+      slotW: sw,
+      slotH: sh,
+      platesPerSheet: p.cols * p.rows,
+      sheetSpanX: xSpan,
+      sheetSpanY: ySpan,
+      issues,
+    }
+  }
+
+  // 2. Silueta Hueso de Collar
+  if (p.shape === 'bone') {
+    const lobeR = p.boneLobeR ?? 9.5
+    const availW = p.plateW - 2 * lobeR + 8
+    const availH = p.plateH - 4
+    const availSquare = Math.min(availW, availH)
+
+    const qrSize = Math.max(16, (availSquare * qrModules) / (qrModules + 2 * p.quietModules))
+    const moduleMm = qrSize / qrModules
+    const quietMm = p.quietModules * moduleMm
+
+    const holeR = p.holeD / 2
+    const holeCy = p.plateH / 2 + holeR + 0.6
+
+    const xSpan = (p.cols - 1) * p.pitchX + p.plateW
+    const ySpan = (p.rows - 1) * p.pitchY + p.plateH + 8
+
+    if (p.plateW < 36 || p.plateH < 24) {
+      issues.push({ level: 'error', msg: 'Dimensiones del hueso demasiado chicas para alojar el QR.' })
+    }
+    if (p.sinkEps >= p.baseThickness) {
+      issues.push({ level: 'error', msg: 'El relieve atraviesa la base: bajá el hundido o subí el espesor.' })
+    }
+    if (p.pitchX < p.plateW || p.pitchY < p.plateH + 4) {
+      issues.push({ level: 'error', msg: `El paso vertical de la grilla debe ser de al menos ${(p.plateH + 4).toFixed(0)}mm por la argolla superior.` })
+    }
+    if (Math.max(xSpan, ySpan) > p.bedSize) {
+      issues.push({ level: 'error', msg: `La placa (${xSpan.toFixed(0)}×${ySpan.toFixed(0)}mm) no entra en la cama de ${p.bedSize}mm.` })
+    }
+    if (moduleMm < MIN_MODULE_MM) {
+      issues.push({ level: 'warn', msg: `Módulo de ${moduleMm.toFixed(3)}mm (mínimo ${MIN_MODULE_MM}): agrandá el alto/ancho del hueso para mejor escaneo.` })
+    }
+
+    return {
+      qrModules, qrSize, moduleMm, quietMm,
+      qrLeft: -qrSize / 2,
+      qrBottom: -qrSize / 2,
+      qrCenterY: 0,
+      holeCx: 0,
+      holeCy,
+      holeR,
+      sideMarginMm: (p.plateW - qrSize) / 2,
+      pawCy: 0,
+      platesPerSheet: p.cols * p.rows,
+      sheetSpanX: xSpan,
+      sheetSpanY: ySpan,
+      issues,
+    }
+  }
+
+  // 3. Silueta Gota clásica
   const Rb = p.plateW / 2
   const by = -(p.plateH / 2 - Rb)
   const ty = p.plateH / 2 - p.topR
 
-  const qrSize = Rb * Math.SQRT2 * qrModules / (qrModules + 2 * p.quietModules)
+  const qrSize = (Rb * Math.SQRT2 * qrModules) / (qrModules + 2 * p.quietModules)
   const moduleMm = qrSize / qrModules
   const quietMm = p.quietModules * moduleMm
 
@@ -208,7 +403,17 @@ export function buildPlate(
   dy = 0,
   flip = false,
 ): void {
-  const outline = dropOutline(dx, dy, p.plateW, p.plateH, p.topR, p.outlineStep)
+  const isBone = p.shape === 'bone'
+  const isSlide = p.shape === 'collar_slide'
+
+  let outline: Vec2[]
+  if (isSlide) {
+    outline = roundedRectOutline(dx, dy, p.plateW, p.plateH, p.cornerR ?? 2.5, p.outlineStep)
+  } else if (isBone) {
+    outline = boneOutline(dx, dy, p.plateW, p.plateH, p.boneLobeR ?? 8, p.outlineStep)
+  } else {
+    outline = dropOutline(dx, dy, p.plateW, p.plateH, p.topR, p.outlineStep)
+  }
 
   if (flip) {
     for (const pt of outline) pt.y = 2 * dy - pt.y
@@ -218,12 +423,49 @@ export function buildPlate(
   const ySign = flip ? -1 : 1
   const actualQr = flip ? rotateQr180(qr) : qr
   const qrCy = ySign * layout.qrCenterY
+  const holeActualCx = dx + (isBone ? ySign * (layout.holeCx ?? 0) : 0)
+  const holeActualCy = dy + ySign * layout.holeCy
 
-  addSlabWithHole(
-    s, outline,
-    { cx: dx, cy: dy + ySign * layout.holeCy, r: layout.holeR },
-    0, p.baseThickness, 0.05, p.chamfer,
-  )
+  const debossD = p.debossBackText ? (p.debossDepth ?? 0.6) : 0
+  const zSlabBot = 0
+
+  // 1. Construir la losa sólida
+  if (isSlide) {
+    addCollarSlideSlab(
+      s, dx, dy,
+      p.plateW, p.plateH,
+      p.cornerR ?? 2.5,
+      p.slotW ?? 12,
+      p.slotH ?? 2.8,
+      p.slotMargin ?? 2.8,
+      zSlabBot,
+      p.baseThickness,
+      p.outlineStep,
+      p.channelDepth ?? 1.4,
+    )
+  } else {
+    addSlabWithHole(
+      s, outline,
+      { cx: holeActualCx, cy: holeActualCy, r: layout.holeR },
+      zSlabBot, p.baseThickness, 0.05, p.chamfer,
+    )
+  }
+
+  // 2. Grabado trasero "huellis.art" (Bajo relieve en la cara inferior)
+  if (debossD > 0 && p.backText) {
+    const textTargetCy = dy + (isBone || isSlide ? 0 : qrCy)
+    addDebossedText(
+      s,
+      p.backText,
+      dx, textTargetCy,
+      0,
+      debossD,
+      isSlide ? 2.8 : 3.2,
+      0.35,
+    )
+  }
+
+  // 3. QR en relieve
   const zBase = p.baseThickness - p.sinkEps
   const zTop = p.baseThickness + p.qrReliefH
   addGridRelief(
@@ -231,17 +473,33 @@ export function buildPlate(
     dx + layout.qrLeft, dy + qrCy - layout.qrSize / 2, layout.moduleMm,
     zBase, zTop,
   )
-  buildPawRelief(
-    s, dx, dy + ySign * layout.pawCy, p.pawSize,
-    zBase, zTop, p.outlineStep,
-  )
+
+  // 4. Borde del hueso
+  if (isBone) {
+    const bodyOut = boneBodyOutline(dx, dy, p.plateW, p.plateH, p.boneLobeR ?? 8, p.outlineStep)
+    if (flip) {
+      for (const pt of bodyOut) pt.y = 2 * dy - pt.y
+      bodyOut.reverse()
+    }
+    addBorderRidge(s, bodyOut, 1.6, zBase, zTop)
+  }
+
+  // 5. Logo de la pata (solo en gota)
+  if (!isBone && !isSlide) {
+    buildPawRelief(
+      s, dx, dy + ySign * layout.pawCy, p.pawSize,
+      zBase, zTop, p.outlineStep,
+    )
+  }
 }
 
 // ─── Preview 2D ──────────────────────────────────────────────────────────────
 
 export interface PlateFootprint {
   outline: Vec2[]
-  hole: { cx: number; cy: number; r: number }
+  bodyOutline?: Vec2[]
+  hole: { cx: number; cy: number; r: number } | null
+  slots?: Array<{ cx: number; cy: number; w: number; h: number }>
   qrRects: Array<{ x: number; y: number; w: number; h: number }>
   paw: { cx: number; cy: number; R: number } | null
 }
@@ -260,9 +518,49 @@ export function plateFootprint(
   layout: Tag3DLayout,
   qr: QrGrid,
 ): PlateFootprint {
+  const isBone = p.shape === 'bone'
+  const isSlide = p.shape === 'collar_slide'
+
+  let outline: Vec2[]
+  if (isSlide) {
+    outline = roundedRectOutline(0, 0, p.plateW, p.plateH, p.cornerR ?? 2.5, p.outlineStep)
+  } else if (isBone) {
+    outline = boneOutline(0, 0, p.plateW, p.plateH, p.boneLobeR ?? 8, p.outlineStep, { holeD: p.holeD })
+  } else {
+    outline = dropOutline(0, 0, p.plateW, p.plateH, p.topR, p.outlineStep)
+  }
+
+  if (isSlide) {
+    const sw = p.slotW ?? 12
+    const sh = p.slotH ?? 2.8
+    const sm = p.slotMargin ?? 2.8
+    const slots = [
+      { cx: 0, cy: layout.slotTopY ?? (p.plateH / 2 - sm - sh / 2), w: sw, h: sh },
+      { cx: 0, cy: layout.slotBotY ?? -(p.plateH / 2 - sm - sh / 2), w: sw, h: sh },
+    ]
+    return {
+      outline,
+      hole: null,
+      slots,
+      qrRects: toMm(greedyRects(qr.data, qr.size, qr.size), qr.size, layout.qrLeft, layout.qrBottom, layout.moduleMm),
+      paw: null,
+    }
+  }
+
+  if (isBone) {
+    const bodyOutline = boneBodyOutline(0, 0, p.plateW, p.plateH, p.boneLobeR ?? 8, p.outlineStep)
+    return {
+      outline,
+      bodyOutline,
+      hole: { cx: layout.holeCx ?? 0, cy: layout.holeCy, r: layout.holeR },
+      qrRects: toMm(greedyRects(qr.data, qr.size, qr.size), qr.size, layout.qrLeft, layout.qrBottom, layout.moduleMm),
+      paw: null,
+    }
+  }
+
   return {
-    outline: dropOutline(0, 0, p.plateW, p.plateH, p.topR, p.outlineStep),
-    hole: { cx: 0, cy: layout.holeCy, r: layout.holeR },
+    outline,
+    hole: { cx: layout.holeCx ?? 0, cy: layout.holeCy, r: layout.holeR },
     qrRects: toMm(greedyRects(qr.data, qr.size, qr.size), qr.size, layout.qrLeft, layout.qrBottom, layout.moduleMm),
     paw: p.pawSize > 0 ? { cx: 0, cy: layout.pawCy, R: p.pawSize / 2 } : null,
   }

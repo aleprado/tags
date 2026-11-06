@@ -4,10 +4,10 @@ import AppLayout from '../layouts/AppLayout'
 import { createQrGrid, codeUrl, type QrGrid } from '../lib/qr'
 import {
   DEFAULT_TAG3D, computeLayout, plateFootprint, buildSheet,
-  chunkSheets, slotOffset, MIN_MODULE_MM,
-  type Tag3DParams,
+  chunkSheets, slotOffset, MIN_MODULE_MM, COLLAR_SLIDE_PRESETS,
+  type Tag3DParams, type CollarPreset,
 } from '../lib/tag3d'
-import { dropOutline } from '../lib/mesh'
+import { dropOutline, boneOutline, roundedRectOutline } from '../lib/mesh'
 import { downloadBlob } from '../lib/download'
 import { zipFiles, type ZipEntry } from '../lib/zip'
 
@@ -37,15 +37,34 @@ function Num({ label, value, step = 0.1, min, max, onChange, suffix }: {
   )
 }
 
-function plateOutlinePath(outline: { x: number; y: number }[], hole: { cx: number; cy: number; r: number }): string {
+function plateOutlinePath(
+  outline: { x: number; y: number }[],
+  hole: { cx: number; cy: number; r: number } | null,
+  slots?: Array<{ cx: number; cy: number; w: number; h: number }>,
+): string {
   const f = (n: number) => n.toFixed(3)
   const poly = outline.map((p, i) => `${i === 0 ? 'M' : 'L'}${f(p.x)},${f(p.y)}`).join('') + 'Z'
-  const { cx, cy, r } = hole
-  const circle =
-    `M${f(cx + r)},${f(cy)}` +
-    `A${f(r)},${f(r)} 0 1 0 ${f(cx - r)},${f(cy)}` +
-    `A${f(r)},${f(r)} 0 1 0 ${f(cx + r)},${f(cy)}Z`
-  return `${poly}${circle}`
+
+  let holes = ''
+  if (hole && hole.r > 0) {
+    const { cx, cy, r } = hole
+    holes +=
+      `M${f(cx + r)},${f(cy)}` +
+      `A${f(r)},${f(r)} 0 1 0 ${f(cx - r)},${f(cy)}` +
+      `A${f(r)},${f(r)} 0 1 0 ${f(cx + r)},${f(cy)}Z`
+  }
+
+  if (slots) {
+    for (const slot of slots) {
+      const left = slot.cx - slot.w / 2
+      const right = slot.cx + slot.w / 2
+      const bot = slot.cy - slot.h / 2
+      const top = slot.cy + slot.h / 2
+      holes += `M${f(left)},${f(bot)}L${f(left)},${f(top)}L${f(right)},${f(top)}L${f(right)},${f(bot)}Z`
+    }
+  }
+
+  return `${poly}${holes}`
 }
 
 function outlinePath(pts: { x: number; y: number }[]): string {
@@ -91,11 +110,38 @@ export default function Print3D() {
 
   const gridOutlines = useMemo(() => {
     return gridSlots.map(({ dx, dy, flip }) => {
-      const pts = dropOutline(dx, dy, p.plateW, p.plateH, p.topR, 2)
+      let pts: { x: number; y: number }[]
+      if (p.shape === 'collar_slide') {
+        pts = roundedRectOutline(dx, dy, p.plateW, p.plateH, p.cornerR ?? 2.5, 2)
+      } else if (p.shape === 'bone') {
+        pts = boneOutline(dx, dy, p.plateW, p.plateH, p.boneLobeR ?? 8, 2, { holeD: p.holeD })
+      } else {
+        pts = dropOutline(dx, dy, p.plateW, p.plateH, p.topR, 2)
+      }
       if (flip) for (const pt of pts) pt.y = 2 * dy - pt.y
       return pts
     })
-  }, [gridSlots, p.plateW, p.plateH, p.topR])
+  }, [gridSlots, p.plateW, p.plateH, p.topR, p.shape, p.boneLobeR, p.cornerR, p.holeD])
+
+  function applyPreset(presetKey: CollarPreset) {
+    const cfg = COLLAR_SLIDE_PRESETS[presetKey]
+    setP(prev => ({
+      ...prev,
+      shape: 'collar_slide',
+      collarPreset: presetKey,
+      plateW: cfg.plateW,
+      plateH: cfg.plateH,
+      slotW: cfg.slotW,
+      slotH: cfg.slotH,
+      slotMargin: cfg.slotMargin,
+      channelDepth: cfg.channelDepth,
+      cornerR: cfg.cornerR,
+      pitchX: cfg.pitchX,
+      pitchY: cfg.pitchY,
+      baseThickness: 2.8,
+      pawSize: 0,
+    }))
+  }
 
   async function downloadSheet(index: number) {
     if (busy) return
@@ -172,17 +218,130 @@ export default function Print3D() {
               <div className="card elev-sm" style={{ flex: '1 1 380px', gap: 'var(--space-3)' }}>
                 <div className="card-kicker">Parámetros</div>
 
+                {/* Silueta */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700 }}>Silueta de la chapita</label>
+                  <div className="seg" style={{ width: '100%' }}>
+                    <button
+                      type="button"
+                      className="seg-opt"
+                      style={{
+                        background: p.shape === 'drop' ? 'var(--color-accent)' : 'transparent',
+                        color: p.shape === 'drop' ? 'var(--color-bg)' : 'inherit',
+                        fontWeight: 600,
+                      }}
+                      onClick={() => setP(prev => ({
+                        ...prev, shape: 'drop', plateW: 40, plateH: 55, topR: 5, pitchX: 42, pitchY: 58, pawSize: 10,
+                      }))}
+                    >
+                      💧 Gota clásica
+                    </button>
+                    <button
+                      type="button"
+                      className="seg-opt"
+                      style={{
+                        background: p.shape === 'bone' ? 'var(--color-accent)' : 'transparent',
+                        color: p.shape === 'bone' ? 'var(--color-bg)' : 'inherit',
+                        fontWeight: 600,
+                      }}
+                      onClick={() => setP(prev => ({
+                        ...prev, shape: 'bone', plateW: 55, plateH: 35, boneLobeR: 9.5, pitchX: 58, pitchY: 44, pawSize: 0,
+                      }))}
+                    >
+                      🦴 Hueso de collar
+                    </button>
+                    <button
+                      type="button"
+                      className="seg-opt"
+                      style={{
+                        background: p.shape === 'collar_slide' ? 'var(--color-accent)' : 'transparent',
+                        color: p.shape === 'collar_slide' ? 'var(--color-bg)' : 'inherit',
+                        fontWeight: 600,
+                      }}
+                      onClick={() => applyPreset(p.collarPreset ?? 'small')}
+                    >
+                      🐾 Pasador de collar
+                    </button>
+                  </div>
+                </div>
+
+                {/* Selector de tamaños de collar para Pasador */}
+                {p.shape === 'collar_slide' && (
+                  <div style={{ background: 'var(--color-surface)', padding: '10px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-divider)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <label style={{ fontSize: 11, fontWeight: 700 }}>Tamaño estándar de collar</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+                      {(['small', 'medium', 'large'] as CollarPreset[]).map(key => {
+                        const isSel = (p.collarPreset ?? 'small') === key
+                        const preset = COLLAR_SLIDE_PRESETS[key]
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            className="btn btn-ghost"
+                            style={{
+                              padding: '6px 8px',
+                              fontSize: 11,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              gap: 2,
+                              textAlign: 'center',
+                              background: isSel ? 'var(--color-accent-100)' : 'transparent',
+                              borderColor: isSel ? 'var(--color-accent)' : 'var(--color-divider)',
+                              color: isSel ? 'var(--color-accent-900)' : 'inherit',
+                              fontWeight: isSel ? 700 : 500,
+                            }}
+                            onClick={() => applyPreset(key)}
+                          >
+                            <span>{key === 'small' ? '🐱 Pequeño' : key === 'medium' ? '🐶 Mediano' : '🐕 Grande'}</span>
+                            <span style={{ fontSize: 9.5, opacity: 0.7 }}>ranura {preset.slotW}mm</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <div style={{ fontSize: 10, opacity: 0.6, marginTop: 2 }}>
+                      {COLLAR_SLIDE_PRESETS[p.collarPreset ?? 'small'].collarDesc} · Incluye canal posterior anti-ondulado
+                    </div>
+                  </div>
+                )}
+
+                {/* Parámetros numéricos en grilla */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                   <Num label="Ancho" suffix="mm" value={p.plateW} min={10} onChange={v => set('plateW', v)} />
                   <Num label="Alto" suffix="mm" value={p.plateH} min={10} onChange={v => set('plateH', v)} />
-                  <Num label="Radio sup." suffix="mm" value={p.topR} min={1} onChange={v => set('topR', v)} />
+
+                  {p.shape === 'bone' && (
+                    <Num label="Radio lóbulo" suffix="mm" value={p.boneLobeR ?? 8} min={4} max={12} onChange={v => set('boneLobeR', v)} />
+                  )}
+                  {p.shape === 'drop' && (
+                    <Num label="Radio sup." suffix="mm" value={p.topR} min={1} onChange={v => set('topR', v)} />
+                  )}
+
+                  {p.shape === 'collar_slide' && (
+                    <>
+                      <Num label="Radio esquinas" suffix="mm" value={p.cornerR ?? 2.5} min={1} max={5} onChange={v => set('cornerR', v)} />
+                      <Num label="Ancho ranura" suffix="mm" value={p.slotW ?? 12} min={8} max={35} onChange={v => set('slotW', v)} />
+                      <Num label="Grosor ranura" suffix="mm" value={p.slotH ?? 2.8} min={1.5} max={8} onChange={v => set('slotH', v)} />
+                      <Num label="Margen ranura" suffix="mm" value={p.slotMargin ?? 2.8} min={1.5} max={6} onChange={v => set('slotMargin', v)} />
+                      <Num label="Canal trasero" suffix="mm" value={p.channelDepth ?? 1.4} min={0} max={3.5} onChange={v => set('channelDepth', v)} />
+                    </>
+                  )}
+
                   <Num label="Espesor base" suffix="mm" value={p.baseThickness} min={0.4} onChange={v => set('baseThickness', v)} />
                   <Num label="Relieve QR" suffix="mm" value={p.qrReliefH} min={0.2} onChange={v => set('qrReliefH', v)} />
                   <Num label="Fillet" suffix="mm" value={p.chamfer} min={0} max={2} onChange={v => set('chamfer', v)} />
                   <Num label="Módulos quiet" value={p.quietModules} step={1} min={0} max={4} onChange={v => set('quietModules', v)} />
-                  <Num label="Ø agujero" suffix="mm" value={p.holeD} min={1} onChange={v => set('holeD', v)} />
-                  <Num label="Margen agujero" suffix="mm" value={p.holeMarginTop} min={0.5} onChange={v => set('holeMarginTop', v)} />
-                  <Num label="Logo pata Ø" suffix="mm" value={p.pawSize} min={0} onChange={v => set('pawSize', v)} />
+
+                  {p.shape !== 'collar_slide' && (
+                    <Num label="Ø agujero" suffix="mm" value={p.holeD} min={1} onChange={v => set('holeD', v)} />
+                  )}
+                  {p.shape === 'drop' && (
+                    <>
+                      <Num label="Margen agujero" suffix="mm" value={p.holeMarginTop} min={0.5} onChange={v => set('holeMarginTop', v)} />
+                      <Num label="Logo pata Ø" suffix="mm" value={p.pawSize} min={0} onChange={v => set('pawSize', v)} />
+                    </>
+                  )}
+
                   <div className="field">
                     <label style={{ fontSize: 11 }}>Corrección QR</label>
                     <select
@@ -197,6 +356,7 @@ export default function Print3D() {
                       <option value="H">H — 30%</option>
                     </select>
                   </div>
+
                   <div className="field" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <input
                       type="checkbox"
@@ -206,10 +366,41 @@ export default function Print3D() {
                     />
                     <label htmlFor="interleave" style={{ fontSize: 11 }}>Intercalar</label>
                   </div>
+
                   <Num label="Columnas" value={p.cols} step={1} min={1} onChange={v => set('cols', v)} />
                   <Num label="Filas" value={p.rows} step={1} min={1} onChange={v => set('rows', v)} />
                   <Num label="Paso X" suffix="mm" value={p.pitchX} min={1} onChange={v => set('pitchX', v)} />
                   <Num label="Paso Y" suffix="mm" value={p.pitchY} min={1} onChange={v => set('pitchY', v)} />
+                </div>
+
+                {/* Grabado trasero */}
+                <div style={{ background: 'var(--color-surface)', padding: '10px 14px', borderRadius: 'var(--radius-md)', display: 'flex', flexDirection: 'column', gap: 8, border: '1px solid var(--color-divider)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <label htmlFor="debossBackText" style={{ fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                      Grabado trasero &quot;huellis.art&quot; (Bajo relieve)
+                    </label>
+                    <input
+                      type="checkbox"
+                      id="debossBackText"
+                      checked={p.debossBackText}
+                      onChange={e => set('debossBackText', e.target.checked)}
+                    />
+                  </div>
+                  {p.debossBackText && (
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8 }}>
+                      <div className="field">
+                        <label style={{ fontSize: 10 }}>Texto grabado en el dorso</label>
+                        <input
+                          className="input"
+                          type="text"
+                          value={p.backText}
+                          onChange={e => set('backText', e.target.value)}
+                          style={{ fontSize: 12, padding: '4px 8px' }}
+                        />
+                      </div>
+                      <Num label="Profundidad" suffix="mm" value={p.debossDepth} min={0.2} max={1.5} step={0.1} onChange={v => set('debossDepth', v)} />
+                    </div>
+                  )}
                 </div>
 
                 <button
@@ -228,14 +419,49 @@ export default function Print3D() {
                   <div className="card-kicker" style={{ alignSelf: 'flex-start' }}>Vista previa</div>
                   {footprint && layout ? (
                     <svg
-                      viewBox={`${-p.plateW / 2} ${-p.plateH / 2} ${p.plateW} ${p.plateH}`}
+                      viewBox={
+                        p.shape === 'bone'
+                          ? `${-p.plateW / 2} ${-p.plateH / 2 - 1} ${p.plateW} ${p.plateH + 9}`
+                          : `${-p.plateW / 2} ${-p.plateH / 2} ${p.plateW} ${p.plateH}`
+                      }
                       style={{ width: '100%', maxWidth: 180, display: 'block', borderRadius: 8 }}
                     >
                       <g transform="scale(1,-1)">
-                        <path d={plateOutlinePath(footprint.outline, footprint.hole)} fill={C_BG} fillRule="evenodd" />
+                        {/* Indicador de canal / cinta del collar */}
+                        {footprint.slots && footprint.slots.length >= 2 && (
+                          <rect
+                            x={-footprint.slots[0].w / 2}
+                            y={-p.plateH / 2 - 2}
+                            width={footprint.slots[0].w}
+                            height={p.plateH + 4}
+                            rx={2}
+                            fill="#7a8a5e"
+                            opacity={0.35}
+                          />
+                        )}
+
+                        <path
+                          d={plateOutlinePath(footprint.outline, footprint.hole, footprint.slots)}
+                          fill={C_BG}
+                          fillRule="evenodd"
+                          stroke="rgba(0,0,0,0.15)"
+                          strokeWidth="0.4"
+                        />
+
+                        {p.shape === 'bone' && footprint.bodyOutline && (
+                          <path
+                            d={outlinePath(footprint.bodyOutline)}
+                            fill="none"
+                            stroke={C_FG}
+                            strokeWidth="1.6"
+                            strokeLinejoin="round"
+                          />
+                        )}
+
                         {footprint.qrRects.map((r, i) => (
                           <rect key={`q${i}`} x={r.x} y={r.y} width={r.w} height={r.h} fill={C_FG} />
                         ))}
+
                         {footprint.paw && (() => {
                           const { cx, cy, R } = footprint.paw!
                           const tr = 0.307 * R
@@ -257,6 +483,9 @@ export default function Print3D() {
                     <div style={{ fontSize: 11, opacity: 0.55, textAlign: 'center', lineHeight: 1.6 }}>
                       QR {layout.qrModules}×{layout.qrModules} · {layout.qrSize.toFixed(1)}mm ·
                       módulo {layout.moduleMm.toFixed(3)}mm
+                      {p.shape === 'collar_slide' && (p.channelDepth ?? 0) > 0 && (
+                        <div>Canal posterior: -{p.channelDepth}mm</div>
+                      )}
                     </div>
                   )}
                 </div>
