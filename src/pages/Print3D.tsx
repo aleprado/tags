@@ -234,7 +234,7 @@ export default function Print3D() {
                         ...prev,
                         shape: 'drop', plateW: 40, plateH: 55, topR: 5,
                         baseThickness: 5, qrReliefH: 0.8, chamfer: 1.0,
-                        holeD: 3.5, pawSize: 10, pitchX: 42, pitchY: 58,
+                        holeD: 3.5, holeMarginTop: 2.6, pawSize: 10, pitchX: 42, pitchY: 58,
                         debossBackText: true,
                       }))}
                     >
@@ -288,6 +288,7 @@ export default function Print3D() {
                         qrReliefH: 0.4,
                         chamfer: 0.2,
                         holeD: 3.5,
+                        holeMarginTop: 3.0,
                         pawSize: 15,
                         cols: 4,
                         rows: 3,
@@ -391,7 +392,10 @@ export default function Print3D() {
                     </>
                   )}
                   {p.shape === 'tulle' && (
-                    <Num label="Logo pata Ø" suffix="mm" value={p.pawSize} min={0} onChange={v => set('pawSize', v)} />
+                    <>
+                      <Num label="Margen sup. logo" suffix="mm" value={p.holeMarginTop} min={0} onChange={v => set('holeMarginTop', v)} />
+                      <Num label="Logo pata Ø" suffix="mm" value={p.pawSize} min={1} onChange={v => set('pawSize', v)} />
+                    </>
                   )}
 
                   <div className="field">
@@ -492,13 +496,33 @@ export default function Print3D() {
                           />
                         )}
 
-                        <path
-                          d={plateOutlinePath(footprint.outline, footprint.hole, footprint.slots)}
-                          fill={C_BG}
-                          fillRule="evenodd"
-                          stroke="rgba(0,0,0,0.15)"
-                          strokeWidth="0.4"
-                        />
+                        {p.shape === 'tulle' ? (
+                          <>
+                            <path
+                              d={outlinePath(footprint.outline)}
+                              fill="rgba(0,0,0,0.03)"
+                              stroke="rgba(0,0,0,0.28)"
+                              strokeWidth="0.35"
+                              strokeDasharray="1.8,1.5"
+                            />
+                            {footprint.qrBackOutline && (
+                              <path
+                                d={outlinePath(footprint.qrBackOutline)}
+                                fill={C_BG}
+                                stroke="rgba(0,0,0,0.15)"
+                                strokeWidth="0.4"
+                              />
+                            )}
+                          </>
+                        ) : (
+                          <path
+                            d={plateOutlinePath(footprint.outline, footprint.hole, footprint.slots)}
+                            fill={C_BG}
+                            fillRule="evenodd"
+                            stroke="rgba(0,0,0,0.15)"
+                            strokeWidth="0.4"
+                          />
+                        )}
 
                         {p.shape === 'bone' && footprint.bodyOutline && (
                           <path

@@ -8,7 +8,7 @@
 import { StlWriter, type TriSink } from './stl'
 import {
   dropOutline, boneOutline, boneBodyOutline, roundedRectOutline,
-  addSlabWithHole, addCollarSlideSlab, addBorderRidge,
+  addSlabWithHole, addSolidSlab, addCollarSlideSlab, addBorderRidge,
   addGridRelief, addEllipseRelief, addEllipseRingRelief, addDebossedText, greedyRects,
   type Vec2, type Rect,
 } from './mesh'
@@ -153,6 +153,7 @@ export interface Tag3DLayout {
   holeR: number
   sideMarginMm: number
   pawCy: number
+  qrBackSize?: number
   slotTopY?: number
   slotBotY?: number
   slotW?: number
@@ -166,35 +167,41 @@ export interface Tag3DLayout {
 export function computeLayout(p: Tag3DParams, qrModules: number): Tag3DLayout {
   const issues: Tag3DIssue[] = []
 
-  // 0. Etiqueta rectangular para prenda sobre tul
+  // 0. Etiqueta para prenda sobre tul (solo se imprime logo + isla QR, unidos por el tul)
   if (p.shape === 'tulle') {
-    const availW = p.plateW - 3
-    const qrSize = Math.max(14, (availW * qrModules) / (qrModules + 2 * p.quietModules))
+    const qrSize = Math.max(14, (p.plateW * qrModules) / (qrModules + 2 * p.quietModules))
     const moduleMm = qrSize / qrModules
     const quietMm = p.quietModules * moduleMm
+    const qrBackSize = qrSize + 2 * quietMm
     const sideMarginMm = (p.plateW - qrSize) / 2
 
-    const qrCenterY = -p.plateH / 2 + sideMarginMm + qrSize / 2
-    const qrQuietTop = qrCenterY + qrSize / 2 + quietMm
+    const qrCenterY = -p.plateH / 2 + qrBackSize / 2
+    const qrBackTop = qrCenterY + qrBackSize / 2
     const plateTop = p.plateH / 2
-    const topSpace = plateTop - qrQuietTop
-    const pawCy = (qrQuietTop + plateTop) / 2
+
+    // Distancia fija desde el margen superior hasta el borde superior del logo
+    const pawTopOffset = 0.4704 * p.pawSize
+    const pawCy = plateTop - p.holeMarginTop - pawTopOffset
 
     const [padDx, padDy] = pawPadCenter(p.pawSize)
     const holeCx = padDx
     const holeCy = pawCy + padDy
     const holeR = p.holeD / 2
+    const pawBot = holeCy - 0.545 * (p.pawSize / 2)
 
     const xSpan = p.interleave && p.rows >= 2
       ? (p.cols - 1) * p.pitchX + p.pitchX / 2 + p.plateW
       : (p.cols - 1) * p.pitchX + p.plateW
     const ySpan = (p.rows - 1) * p.pitchY + p.plateH
 
-    if (p.plateW < 22 || p.plateH < 36) {
+    if (p.plateW < 20 || p.plateH < 36) {
       issues.push({ level: 'error', msg: 'Dimensiones de etiqueta demasiado chicas para logo + QR.' })
     }
     if (p.holeD <= 0) {
       issues.push({ level: 'error', msg: 'El diámetro del agujero debe ser mayor a 0.' })
+    }
+    if (p.holeMarginTop < 0) {
+      issues.push({ level: 'error', msg: 'El margen superior del logo no puede ser negativo.' })
     }
     if (p.sinkEps >= p.baseThickness) {
       issues.push({ level: 'error', msg: 'El relieve atraviesa la base: bajá el hundido o subí el espesor.' })
@@ -208,18 +215,12 @@ export function computeLayout(p: Tag3DParams, qrModules: number): Tag3DLayout {
 
     const padMinorR = 0.545 * (p.pawSize / 2)
     if (p.pawSize <= 0) {
-      issues.push({ level: 'warn', msg: 'Con logo Ø 0mm el agujero queda sin el anillo de la pata.' })
+      issues.push({ level: 'error', msg: 'En modo Tul el logo de la pata debe ser mayor a 0mm.' })
     } else if (holeR >= padMinorR - 0.6) {
       issues.push({ level: 'warn', msg: 'El agujero es grande para la almohadilla de la pata: subí el tamaño del logo o achicá Ø agujero.' })
     }
-    if (p.pawSize > 0 && p.pawSize > topSpace - 1.5) {
-      issues.push({ level: 'warn', msg: 'El logo de la pata es muy grande para el espacio superior.' })
-    }
-    if (holeCy + holeR > plateTop - 1.6) {
-      issues.push({ level: 'warn', msg: 'El agujero queda muy cerca del borde superior.' })
-    }
-    if (p.debossBackText && p.debossDepth >= p.baseThickness * 0.5) {
-      issues.push({ level: 'warn', msg: 'Grabado trasero profundo para etiqueta fina de tul: conviene desactivarlo.' })
+    if (pawBot - qrBackTop < 2) {
+      issues.push({ level: 'warn', msg: 'El logo y el QR quedan muy juntos o superpuestos: aumentá el alto o achicá el logo.' })
     }
     if (moduleMm < MIN_MODULE_MM) {
       issues.push({ level: 'warn', msg: `Módulo de ${moduleMm.toFixed(3)}mm (mínimo ${MIN_MODULE_MM}): aumentá el ancho de la etiqueta.` })
@@ -238,6 +239,7 @@ export function computeLayout(p: Tag3DParams, qrModules: number): Tag3DLayout {
       holeR,
       sideMarginMm,
       pawCy,
+      qrBackSize,
       platesPerSheet: p.cols * p.rows,
       sheetSpanX: xSpan,
       sheetSpanY: ySpan,
@@ -527,8 +529,12 @@ export function buildPlate(
   const debossD = p.debossBackText ? (p.debossDepth ?? 0.6) : 0
   const zSlabBot = 0
 
-  // 1. Construir la losa sólida
-  if (isSlide) {
+  // 1. Construir la losa sólida (en modo tul solo se imprime la isla cuadrada del QR)
+  if (isTulle) {
+    const qrBack = layout.qrBackSize ?? p.plateW
+    const qrOutline = roundedRectOutline(dx, dy + qrCy, qrBack, qrBack, p.cornerR ?? 2.5, p.outlineStep)
+    addSolidSlab(s, qrOutline, dx, dy + qrCy, zSlabBot, p.baseThickness, p.chamfer)
+  } else if (isSlide) {
     addCollarSlideSlab(
       s, dx, dy,
       p.plateW, p.plateH,
@@ -549,8 +555,8 @@ export function buildPlate(
     )
   }
 
-  // 2. Grabado trasero "huellis.art" (Bajo relieve en la cara inferior)
-  if (debossD > 0 && p.backText) {
+  // 2. Grabado trasero "huellis.art" (Bajo relieve en la cara inferior; no aplica en tul)
+  if (!isTulle && debossD > 0 && p.backText) {
     const textTargetCy = dy + (isBone || isSlide ? 0 : qrCy)
     addDebossedText(
       s,
@@ -582,11 +588,11 @@ export function buildPlate(
     addBorderRidge(s, bodyOut, 1.6, zBase, zTop)
   }
 
-  // 5. Logo de la pata (gota y etiqueta sobre tul)
+  // 5. Logo de la pata (en tul nace desde z=0 para encapsular la tela)
   if (isTulle) {
     buildPawRelief(
       s, dx, dy + ySign * layout.pawCy, p.pawSize,
-      zBase, zTop, p.outlineStep, false, layout.holeR, flip,
+      zSlabBot, zTop, p.outlineStep, false, layout.holeR, flip,
     )
   } else if (!isBone && !isSlide) {
     buildPawRelief(
@@ -601,6 +607,7 @@ export function buildPlate(
 export interface PlateFootprint {
   outline: Vec2[]
   bodyOutline?: Vec2[]
+  qrBackOutline?: Vec2[]
   hole: { cx: number; cy: number; r: number } | null
   slots?: Array<{ cx: number; cy: number; w: number; h: number }>
   qrRects: Array<{ x: number; y: number; w: number; h: number }>
@@ -659,6 +666,18 @@ export function plateFootprint(
       hole: { cx: layout.holeCx ?? 0, cy: layout.holeCy, r: layout.holeR },
       qrRects: toMm(greedyRects(qr.data, qr.size, qr.size), qr.size, layout.qrLeft, layout.qrBottom, layout.moduleMm),
       paw: null,
+    }
+  }
+
+  if (isTulle) {
+    const qrBack = layout.qrBackSize ?? p.plateW
+    const qrBackOutline = roundedRectOutline(0, layout.qrCenterY, qrBack, qrBack, p.cornerR ?? 2.5, p.outlineStep)
+    return {
+      outline,
+      qrBackOutline,
+      hole: { cx: layout.holeCx ?? 0, cy: layout.holeCy, r: layout.holeR },
+      qrRects: toMm(greedyRects(qr.data, qr.size, qr.size), qr.size, layout.qrLeft, layout.qrBottom, layout.moduleMm),
+      paw: p.pawSize > 0 ? { cx: 0, cy: layout.pawCy, R: p.pawSize / 2 } : null,
     }
   }
 

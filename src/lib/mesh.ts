@@ -474,6 +474,72 @@ export function addSlabWithHole(
   }
 }
 
+/** Extruye un contorno convexo/estrellado sólido (sin agujero) desde z0 hasta z1. */
+export function addSolidSlab(
+  s: TriSink,
+  outer: Vec2[],
+  cx: number,
+  cy: number,
+  z0: number,
+  z1: number,
+  chamfer = 0,
+  filletSegs = 4,
+): void {
+  const n = outer.length
+  if (n < 3) throw new Error('addSolidSlab: el contorno necesita al menos 3 vértices')
+
+  const R = Math.max(0, Math.min(chamfer, (z1 - z0) * 0.4))
+  const zTopFlat = R > 0 ? z1 - R : z1
+
+  // Tapa inferior en z0
+  const cBot: Vec3 = [cx, cy, z0]
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n
+    s.tri(cBot, [outer[j].x, outer[j].y, z0], [outer[i].x, outer[i].y, z0])
+  }
+
+  // Pared vertical hasta zTopFlat
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n
+    const b0: Vec3 = [outer[i].x, outer[i].y, z0]
+    const b1: Vec3 = [outer[j].x, outer[j].y, z0]
+    const t0: Vec3 = [outer[i].x, outer[i].y, zTopFlat]
+    const t1: Vec3 = [outer[j].x, outer[j].y, zTopFlat]
+    s.tri(b0, b1, t1); s.tri(b0, t1, t0)
+  }
+
+  // Fillet superior opcional
+  let topRing = outer
+  if (R > 0) {
+    const segs = Math.max(2, filletSegs)
+    let prevRing = outer
+    let prevZ = zTopFlat
+    for (let k = 1; k <= segs; k++) {
+      const a = (k / segs) * (Math.PI / 2)
+      const nextRing = insetContour(outer, R * (1 - Math.cos(a)))
+      const nextZ = zTopFlat + R * Math.sin(a)
+      for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n
+        const b0: Vec3 = [prevRing[i].x, prevRing[i].y, prevZ]
+        const b1: Vec3 = [prevRing[j].x, prevRing[j].y, prevZ]
+        const t0: Vec3 = [nextRing[i].x, nextRing[i].y, nextZ]
+        const t1: Vec3 = [nextRing[j].x, nextRing[j].y, nextZ]
+        s.tri(b0, b1, t1); s.tri(b0, t1, t0)
+      }
+      prevRing = nextRing
+      prevZ = nextZ
+    }
+    topRing = prevRing
+  }
+
+  // Tapa superior en z1
+  const cTop: Vec3 = [cx, cy, z1]
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n
+    s.tri(cTop, [topRing[i].x, topRing[i].y, z1], [topRing[j].x, topRing[j].y, z1])
+  }
+}
+
 // ─── Losa de Pasador con Ranuras y Canal Posterior (Anti-Ondulado) ────────────
 
 /**
