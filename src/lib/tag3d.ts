@@ -9,12 +9,12 @@ import { StlWriter, type TriSink } from './stl'
 import {
   dropOutline, boneOutline, boneBodyOutline, roundedRectOutline,
   addSlabWithHole, addCollarSlideSlab, addBorderRidge,
-  addGridRelief, addEllipseRelief, addDebossedText, greedyRects,
+  addGridRelief, addEllipseRelief, addEllipseRingRelief, addDebossedText, greedyRects,
   type Vec2, type Rect,
 } from './mesh'
 import { createQrGrid, codeUrl, checkQrOrientation, type Ecl, type QrGrid } from './qr'
 
-export type Tag3DShape = 'drop' | 'bone' | 'collar_slide'
+export type Tag3DShape = 'drop' | 'bone' | 'collar_slide' | 'tulle'
 export type CollarPreset = 'small' | 'medium' | 'large'
 
 export interface Tag3DParams {
@@ -165,6 +165,85 @@ export interface Tag3DLayout {
 
 export function computeLayout(p: Tag3DParams, qrModules: number): Tag3DLayout {
   const issues: Tag3DIssue[] = []
+
+  // 0. Etiqueta rectangular para prenda sobre tul
+  if (p.shape === 'tulle') {
+    const availW = p.plateW - 3
+    const qrSize = Math.max(14, (availW * qrModules) / (qrModules + 2 * p.quietModules))
+    const moduleMm = qrSize / qrModules
+    const quietMm = p.quietModules * moduleMm
+    const sideMarginMm = (p.plateW - qrSize) / 2
+
+    const qrCenterY = -p.plateH / 2 + sideMarginMm + qrSize / 2
+    const qrQuietTop = qrCenterY + qrSize / 2 + quietMm
+    const plateTop = p.plateH / 2
+    const topSpace = plateTop - qrQuietTop
+    const pawCy = (qrQuietTop + plateTop) / 2
+
+    const [padDx, padDy] = pawPadCenter(p.pawSize)
+    const holeCx = padDx
+    const holeCy = pawCy + padDy
+    const holeR = p.holeD / 2
+
+    const xSpan = p.interleave && p.rows >= 2
+      ? (p.cols - 1) * p.pitchX + p.pitchX / 2 + p.plateW
+      : (p.cols - 1) * p.pitchX + p.plateW
+    const ySpan = (p.rows - 1) * p.pitchY + p.plateH
+
+    if (p.plateW < 22 || p.plateH < 36) {
+      issues.push({ level: 'error', msg: 'Dimensiones de etiqueta demasiado chicas para logo + QR.' })
+    }
+    if (p.holeD <= 0) {
+      issues.push({ level: 'error', msg: 'El diámetro del agujero debe ser mayor a 0.' })
+    }
+    if (p.sinkEps >= p.baseThickness) {
+      issues.push({ level: 'error', msg: 'El relieve atraviesa la base: bajá el hundido o subí el espesor.' })
+    }
+    if (p.pitchX < p.plateW || p.pitchY < p.plateH) {
+      issues.push({ level: 'error', msg: 'El paso de la grilla es chico: las etiquetas se superpondrían.' })
+    }
+    if (Math.max(xSpan, ySpan) > p.bedSize) {
+      issues.push({ level: 'error', msg: `La placa (${xSpan.toFixed(0)}×${ySpan.toFixed(0)}mm) no entra en la cama de ${p.bedSize}mm.` })
+    }
+
+    const padMinorR = 0.545 * (p.pawSize / 2)
+    if (p.pawSize <= 0) {
+      issues.push({ level: 'warn', msg: 'Con logo Ø 0mm el agujero queda sin el anillo de la pata.' })
+    } else if (holeR >= padMinorR - 0.6) {
+      issues.push({ level: 'warn', msg: 'El agujero es grande para la almohadilla de la pata: subí el tamaño del logo o achicá Ø agujero.' })
+    }
+    if (p.pawSize > 0 && p.pawSize > topSpace - 1.5) {
+      issues.push({ level: 'warn', msg: 'El logo de la pata es muy grande para el espacio superior.' })
+    }
+    if (holeCy + holeR > plateTop - 1.6) {
+      issues.push({ level: 'warn', msg: 'El agujero queda muy cerca del borde superior.' })
+    }
+    if (p.debossBackText && p.debossDepth >= p.baseThickness * 0.5) {
+      issues.push({ level: 'warn', msg: 'Grabado trasero profundo para etiqueta fina de tul: conviene desactivarlo.' })
+    }
+    if (moduleMm < MIN_MODULE_MM) {
+      issues.push({ level: 'warn', msg: `Módulo de ${moduleMm.toFixed(3)}mm (mínimo ${MIN_MODULE_MM}): aumentá el ancho de la etiqueta.` })
+    }
+    if (p.qrReliefH < 0.4) {
+      issues.push({ level: 'warn', msg: 'Relieve menor a 2 capas de 0.2mm.' })
+    }
+
+    return {
+      qrModules, qrSize, moduleMm, quietMm,
+      qrLeft: -qrSize / 2,
+      qrBottom: qrCenterY - qrSize / 2,
+      qrCenterY,
+      holeCx,
+      holeCy,
+      holeR,
+      sideMarginMm,
+      pawCy,
+      platesPerSheet: p.cols * p.rows,
+      sheetSpanX: xSpan,
+      sheetSpanY: ySpan,
+      issues,
+    }
+  }
 
   // 1. Silueta Pasador de Collar
   if (p.shape === 'collar_slide') {
@@ -347,6 +426,17 @@ export function computeLayout(p: Tag3DParams, qrModules: number): Tag3DLayout {
 
 // ─── Logo de la pata ─────────────────────────────────────────────────────────
 
+export function pawPadCenter(pawSize: number, mirrorX = false, flipY = false): [number, number] {
+  if (pawSize <= 0) return [0, 0]
+  const R = pawSize / 2
+  const mx = mirrorX ? -1 : 1
+  const my = flipY ? -1 : 1
+  const ang = mx * -12 * Math.PI / 180
+  const ca = Math.cos(ang), sa = Math.sin(ang)
+  const dy = -0.455 * R
+  return [mx * (-dy * sa), my * (dy * ca)]
+}
+
 export function buildPawRelief(
   s: TriSink,
   cx: number, cy: number,
@@ -354,18 +444,25 @@ export function buildPawRelief(
   zBase: number, z1: number,
   step: number,
   mirrorX = false,
+  padHoleR = 0,
+  flipY = false,
 ): void {
   if (pawSize <= 0) return
   const R = pawSize / 2
 
   const mx = mirrorX ? -1 : 1
+  const my = flipY ? -1 : 1
   const ang = mx * -12 * Math.PI / 180
   const ca = Math.cos(ang), sa = Math.sin(ang)
   const rot = (dx: number, dy: number): [number, number] =>
-    [mx * (dx * ca - dy * sa), dx * sa + dy * ca]
+    [mx * (dx * ca - dy * sa), my * (dx * sa + dy * ca)]
 
   const [padDx, padDy] = rot(0, -0.455 * R)
-  addEllipseRelief(s, cx + padDx, cy + padDy, 0.636 * R, 0.545 * R, zBase, z1, step)
+  if (padHoleR > 0) {
+    addEllipseRingRelief(s, cx + padDx, cy + padDy, 0.636 * R, 0.545 * R, padHoleR, zBase, z1, step)
+  } else {
+    addEllipseRelief(s, cx + padDx, cy + padDy, 0.636 * R, 0.545 * R, zBase, z1, step)
+  }
 
   const tr = 0.307 * R
   for (const [dx, dy] of [
@@ -405,9 +502,10 @@ export function buildPlate(
 ): void {
   const isBone = p.shape === 'bone'
   const isSlide = p.shape === 'collar_slide'
+  const isTulle = p.shape === 'tulle'
 
   let outline: Vec2[]
-  if (isSlide) {
+  if (isSlide || isTulle) {
     outline = roundedRectOutline(dx, dy, p.plateW, p.plateH, p.cornerR ?? 2.5, p.outlineStep)
   } else if (isBone) {
     outline = boneOutline(dx, dy, p.plateW, p.plateH, p.boneLobeR ?? 8, p.outlineStep)
@@ -423,7 +521,7 @@ export function buildPlate(
   const ySign = flip ? -1 : 1
   const actualQr = flip ? rotateQr180(qr) : qr
   const qrCy = ySign * layout.qrCenterY
-  const holeActualCx = dx + (isBone ? ySign * (layout.holeCx ?? 0) : 0)
+  const holeActualCx = dx + (isBone ? ySign * (layout.holeCx ?? 0) : (isTulle ? (layout.holeCx ?? 0) : 0))
   const holeActualCy = dy + ySign * layout.holeCy
 
   const debossD = p.debossBackText ? (p.debossDepth ?? 0.6) : 0
@@ -484,11 +582,16 @@ export function buildPlate(
     addBorderRidge(s, bodyOut, 1.6, zBase, zTop)
   }
 
-  // 5. Logo de la pata (solo en gota)
-  if (!isBone && !isSlide) {
+  // 5. Logo de la pata (gota y etiqueta sobre tul)
+  if (isTulle) {
     buildPawRelief(
       s, dx, dy + ySign * layout.pawCy, p.pawSize,
-      zBase, zTop, p.outlineStep,
+      zBase, zTop, p.outlineStep, false, layout.holeR, flip,
+    )
+  } else if (!isBone && !isSlide) {
+    buildPawRelief(
+      s, dx, dy + ySign * layout.pawCy, p.pawSize,
+      zBase, zTop, p.outlineStep, false, 0, flip,
     )
   }
 }
@@ -520,9 +623,10 @@ export function plateFootprint(
 ): PlateFootprint {
   const isBone = p.shape === 'bone'
   const isSlide = p.shape === 'collar_slide'
+  const isTulle = p.shape === 'tulle'
 
   let outline: Vec2[]
-  if (isSlide) {
+  if (isSlide || isTulle) {
     outline = roundedRectOutline(0, 0, p.plateW, p.plateH, p.cornerR ?? 2.5, p.outlineStep)
   } else if (isBone) {
     outline = boneOutline(0, 0, p.plateW, p.plateH, p.boneLobeR ?? 8, p.outlineStep, { holeD: p.holeD })

@@ -697,6 +697,57 @@ export function addEllipseRelief(
   }
 }
 
+/** Elipse en relieve con un agujero circular pasante en el centro. */
+export function addEllipseRingRelief(
+  s: TriSink,
+  cx: number, cy: number,
+  rx: number, ry: number,
+  holeR: number,
+  z0: number, z1: number,
+  step = 0.6,
+): void {
+  if (holeR <= 0 || holeR >= Math.min(rx, ry)) {
+    addEllipseRelief(s, cx, cy, rx, ry, z0, z1, step)
+    return
+  }
+  const perim = 2 * Math.PI * Math.sqrt((rx * rx + ry * ry) / 2)
+  const n = Math.max(16, Math.ceil(perim / step))
+  const ox = new Float64Array(n)
+  const oy = new Float64Array(n)
+  const ix = new Float64Array(n)
+  const iy = new Float64Array(n)
+  for (let i = 0; i < n; i++) {
+    const t = (2 * Math.PI * i) / n
+    const cos = Math.cos(t)
+    const sin = Math.sin(t)
+    ox[i] = cx + rx * cos
+    oy[i] = cy + ry * sin
+    ix[i] = cx + holeR * cos
+    iy[i] = cy + holeR * sin
+  }
+
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n
+    const ob0: Vec3 = [ox[i], oy[i], z0]
+    const ob1: Vec3 = [ox[j], oy[j], z0]
+    const ot0: Vec3 = [ox[i], oy[i], z1]
+    const ot1: Vec3 = [ox[j], oy[j], z1]
+
+    const ib0: Vec3 = [ix[i], iy[i], z0]
+    const ib1: Vec3 = [ix[j], iy[j], z0]
+    const it0: Vec3 = [ix[i], iy[i], z1]
+    const it1: Vec3 = [ix[j], iy[j], z1]
+
+    // Tapa superior e inferior (anillo)
+    s.tri(it0, ot0, ot1); s.tri(it0, ot1, it1)
+    s.tri(ib0, ob1, ob0); s.tri(ib0, ib1, ob1)
+    // Pared exterior
+    s.tri(ob0, ob1, ot1); s.tri(ob0, ot1, ot0)
+    // Pared interior del agujero
+    s.tri(ib1, ib0, it0); s.tri(ib1, it0, it1)
+  }
+}
+
 // ─── Rasterizado de Texto para Grabado Trasero (Bajo Relieve) ────────────────
 
 export interface RasterText {

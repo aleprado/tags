@@ -111,7 +111,7 @@ export default function Print3D() {
   const gridOutlines = useMemo(() => {
     return gridSlots.map(({ dx, dy, flip }) => {
       let pts: { x: number; y: number }[]
-      if (p.shape === 'collar_slide') {
+      if (p.shape === 'collar_slide' || p.shape === 'tulle') {
         pts = roundedRectOutline(dx, dy, p.plateW, p.plateH, p.cornerR ?? 2.5, 2)
       } else if (p.shape === 'bone') {
         pts = boneOutline(dx, dy, p.plateW, p.plateH, p.boneLobeR ?? 8, 2, { holeD: p.holeD })
@@ -221,7 +221,7 @@ export default function Print3D() {
                 {/* Silueta */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <label style={{ fontSize: 11, fontWeight: 700 }}>Silueta de la chapita</label>
-                  <div className="seg" style={{ width: '100%' }}>
+                  <div className="seg" style={{ width: '100%', flexWrap: 'wrap' }}>
                     <button
                       type="button"
                       className="seg-opt"
@@ -231,7 +231,11 @@ export default function Print3D() {
                         fontWeight: 600,
                       }}
                       onClick={() => setP(prev => ({
-                        ...prev, shape: 'drop', plateW: 40, plateH: 55, topR: 5, pitchX: 42, pitchY: 58, pawSize: 10,
+                        ...prev,
+                        shape: 'drop', plateW: 40, plateH: 55, topR: 5,
+                        baseThickness: 5, qrReliefH: 0.8, chamfer: 1.0,
+                        holeD: 3.5, pawSize: 10, pitchX: 42, pitchY: 58,
+                        debossBackText: true,
                       }))}
                     >
                       💧 Gota clásica
@@ -245,7 +249,11 @@ export default function Print3D() {
                         fontWeight: 600,
                       }}
                       onClick={() => setP(prev => ({
-                        ...prev, shape: 'bone', plateW: 55, plateH: 35, boneLobeR: 9.5, pitchX: 58, pitchY: 44, pawSize: 0,
+                        ...prev,
+                        shape: 'bone', plateW: 55, plateH: 35, boneLobeR: 9.5,
+                        baseThickness: 5, qrReliefH: 0.8, chamfer: 1.0,
+                        holeD: 3.5, pitchX: 58, pitchY: 44, pawSize: 0,
+                        debossBackText: true,
                       }))}
                     >
                       🦴 Hueso de collar
@@ -262,8 +270,45 @@ export default function Print3D() {
                     >
                       🐾 Pasador de collar
                     </button>
+                    <button
+                      type="button"
+                      className="seg-opt"
+                      style={{
+                        background: p.shape === 'tulle' ? 'var(--color-accent)' : 'transparent',
+                        color: p.shape === 'tulle' ? 'var(--color-bg)' : 'inherit',
+                        fontWeight: 600,
+                      }}
+                      onClick={() => setP(prev => ({
+                        ...prev,
+                        shape: 'tulle',
+                        plateW: 32,
+                        plateH: 55,
+                        cornerR: 3,
+                        baseThickness: 1.2,
+                        qrReliefH: 0.4,
+                        chamfer: 0.2,
+                        holeD: 3.5,
+                        pawSize: 15,
+                        cols: 4,
+                        rows: 3,
+                        pitchX: 36,
+                        pitchY: 59,
+                        interleave: false,
+                        debossBackText: false,
+                      }))}
+                    >
+                      🧵 Prenda / Tul
+                    </button>
                   </div>
                 </div>
+
+                {p.shape === 'tulle' && (
+                  <div style={{ background: 'var(--color-surface)', padding: '10px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-divider)', fontSize: 11, lineHeight: 1.5 }}>
+                    <strong>Técnica sobre tul sintético:</strong> programá una pausa en el slicer a mitad de la base
+                    {' '}(<strong>z = {(p.baseThickness / 2).toFixed(2)} mm</strong>, ej. capa 3 a 0.2 mm), tensá el tul sobre la cama con cinta y reanudá para encapsular la malla.
+                    La perforación queda centrada en la almohadilla de la pata.
+                  </div>
+                )}
 
                 {/* Selector de tamaños de collar para Pasador */}
                 {p.shape === 'collar_slide' && (
@@ -317,6 +362,10 @@ export default function Print3D() {
                     <Num label="Radio sup." suffix="mm" value={p.topR} min={1} onChange={v => set('topR', v)} />
                   )}
 
+                  {p.shape === 'tulle' && (
+                    <Num label="Radio esquinas" suffix="mm" value={p.cornerR ?? 3} min={0.5} max={8} onChange={v => set('cornerR', v)} />
+                  )}
+
                   {p.shape === 'collar_slide' && (
                     <>
                       <Num label="Radio esquinas" suffix="mm" value={p.cornerR ?? 2.5} min={1} max={5} onChange={v => set('cornerR', v)} />
@@ -340,6 +389,9 @@ export default function Print3D() {
                       <Num label="Margen agujero" suffix="mm" value={p.holeMarginTop} min={0.5} onChange={v => set('holeMarginTop', v)} />
                       <Num label="Logo pata Ø" suffix="mm" value={p.pawSize} min={0} onChange={v => set('pawSize', v)} />
                     </>
+                  )}
+                  {p.shape === 'tulle' && (
+                    <Num label="Logo pata Ø" suffix="mm" value={p.pawSize} min={0} onChange={v => set('pawSize', v)} />
                   )}
 
                   <div className="field">
@@ -466,11 +518,23 @@ export default function Print3D() {
                           const { cx, cy, R } = footprint.paw!
                           const tr = 0.307 * R
                           return (
-                            <g transform={`rotate(-12, ${cx}, ${cy})`}>
-                              <ellipse cx={cx} cy={cy - 0.455 * R} rx={0.636 * R} ry={0.545 * R} fill={C_FG} />
-                              {([[-0.625, 0.375], [0, 0.648], [0.625, 0.375]] as [number, number][]).map(([dx, dy], i) => (
-                                <circle key={i} cx={cx + dx * R} cy={cy + dy * R} r={tr} fill={C_FG} />
-                              ))}
+                            <g>
+                              <g transform={`rotate(-12, ${cx}, ${cy})`}>
+                                <ellipse cx={cx} cy={cy - 0.455 * R} rx={0.636 * R} ry={0.545 * R} fill={C_FG} />
+                                {([[-0.625, 0.375], [0, 0.648], [0.625, 0.375]] as [number, number][]).map(([dx, dy], i) => (
+                                  <circle key={i} cx={cx + dx * R} cy={cy + dy * R} r={tr} fill={C_FG} />
+                                ))}
+                              </g>
+                              {p.shape === 'tulle' && footprint.hole && footprint.hole.r > 0 && (
+                                <circle
+                                  cx={footprint.hole.cx}
+                                  cy={footprint.hole.cy}
+                                  r={footprint.hole.r}
+                                  fill="#ffffff"
+                                  stroke="rgba(0,0,0,0.2)"
+                                  strokeWidth="0.3"
+                                />
+                              )}
                             </g>
                           )
                         })()}
@@ -483,7 +547,11 @@ export default function Print3D() {
                     <div style={{ fontSize: 11, opacity: 0.55, textAlign: 'center', lineHeight: 1.6 }}>
                       QR {layout.qrModules}×{layout.qrModules} · {layout.qrSize.toFixed(1)}mm ·
                       módulo {layout.moduleMm.toFixed(3)}mm
-                      {p.shape === 'collar_slide' && (p.channelDepth ?? 0) > 0 && (
+                      {p.shape === 'tulle' && (
+                    <Num label="Radio esquinas" suffix="mm" value={p.cornerR ?? 3} min={0.5} max={8} onChange={v => set('cornerR', v)} />
+                  )}
+
+                  {p.shape === 'collar_slide' && (p.channelDepth ?? 0) > 0 && (
                         <div>Canal posterior: -{p.channelDepth}mm</div>
                       )}
                     </div>
