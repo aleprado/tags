@@ -8,7 +8,7 @@
 import { StlWriter, type TriSink } from './stl'
 import {
   dropOutline, boneOutline, boneBodyOutline, roundedRectOutline,
-  addSlabWithHole, addSolidSlab, addCollarSlideSlab, addBorderRidge,
+  addSlabWithHole, addCollarSlideSlab, addBorderRidge,
   addGridRelief, addEllipseRelief, addEllipseRingRelief, addDebossedText, greedyRects,
   type Vec2, type Rect,
 } from './mesh'
@@ -167,16 +167,15 @@ export interface Tag3DLayout {
 export function computeLayout(p: Tag3DParams, qrModules: number): Tag3DLayout {
   const issues: Tag3DIssue[] = []
 
-  // 0. Etiqueta para prenda sobre tul (solo se imprime logo + isla QR, unidos por el tul)
+  // 0. Etiqueta para prenda sobre tul (solo se imprime logo + módulos del QR, la base es el tul)
   if (p.shape === 'tulle') {
     const qrSize = Math.max(14, (p.plateW * qrModules) / (qrModules + 2 * p.quietModules))
     const moduleMm = qrSize / qrModules
     const quietMm = p.quietModules * moduleMm
-    const qrBackSize = qrSize + 2 * quietMm
     const sideMarginMm = (p.plateW - qrSize) / 2
 
-    const qrCenterY = -p.plateH / 2 + qrBackSize / 2
-    const qrBackTop = qrCenterY + qrBackSize / 2
+    const qrCenterY = -p.plateH / 2 + sideMarginMm + qrSize / 2
+    const qrTop = qrCenterY + qrSize / 2
     const plateTop = p.plateH / 2
 
     // Distancia fija desde el margen superior hasta el borde superior del logo
@@ -203,9 +202,6 @@ export function computeLayout(p: Tag3DParams, qrModules: number): Tag3DLayout {
     if (p.holeMarginTop < 0) {
       issues.push({ level: 'error', msg: 'El margen superior del logo no puede ser negativo.' })
     }
-    if (p.sinkEps >= p.baseThickness) {
-      issues.push({ level: 'error', msg: 'El relieve atraviesa la base: bajá el hundido o subí el espesor.' })
-    }
     if (p.pitchX < p.plateW || p.pitchY < p.plateH) {
       issues.push({ level: 'error', msg: 'El paso de la grilla es chico: las etiquetas se superpondrían.' })
     }
@@ -219,14 +215,11 @@ export function computeLayout(p: Tag3DParams, qrModules: number): Tag3DLayout {
     } else if (holeR >= padMinorR - 0.6) {
       issues.push({ level: 'warn', msg: 'El agujero es grande para la almohadilla de la pata: subí el tamaño del logo o achicá Ø agujero.' })
     }
-    if (pawBot - qrBackTop < 2) {
+    if (pawBot - qrTop < 2) {
       issues.push({ level: 'warn', msg: 'El logo y el QR quedan muy juntos o superpuestos: aumentá el alto o achicá el logo.' })
     }
     if (moduleMm < MIN_MODULE_MM) {
       issues.push({ level: 'warn', msg: `Módulo de ${moduleMm.toFixed(3)}mm (mínimo ${MIN_MODULE_MM}): aumentá el ancho de la etiqueta.` })
-    }
-    if (p.qrReliefH < 0.4) {
-      issues.push({ level: 'warn', msg: 'Relieve menor a 2 capas de 0.2mm.' })
     }
 
     return {
@@ -239,7 +232,6 @@ export function computeLayout(p: Tag3DParams, qrModules: number): Tag3DLayout {
       holeR,
       sideMarginMm,
       pawCy,
-      qrBackSize,
       platesPerSheet: p.cols * p.rows,
       sheetSpanX: xSpan,
       sheetSpanY: ySpan,
@@ -529,12 +521,8 @@ export function buildPlate(
   const debossD = p.debossBackText ? (p.debossDepth ?? 0.6) : 0
   const zSlabBot = 0
 
-  // 1. Construir la losa sólida (en modo tul solo se imprime la isla cuadrada del QR)
-  if (isTulle) {
-    const qrBack = layout.qrBackSize ?? p.plateW
-    const qrOutline = roundedRectOutline(dx, dy + qrCy, qrBack, qrBack, p.cornerR ?? 2.5, p.outlineStep)
-    addSolidSlab(s, qrOutline, dx, dy + qrCy, zSlabBot, p.baseThickness, p.chamfer)
-  } else if (isSlide) {
+  // 1. Construir la losa sólida (en modo tul NO hay losa, la base es el tul)
+  if (isSlide) {
     addCollarSlideSlab(
       s, dx, dy,
       p.plateW, p.plateH,
@@ -547,7 +535,7 @@ export function buildPlate(
       p.outlineStep,
       p.channelDepth ?? 1.4,
     )
-  } else {
+  } else if (!isTulle) {
     addSlabWithHole(
       s, outline,
       { cx: holeActualCx, cy: holeActualCy, r: layout.holeR },
@@ -569,8 +557,8 @@ export function buildPlate(
     )
   }
 
-  // 3. QR en relieve
-  const zBase = p.baseThickness - p.sinkEps
+  // 3. QR en relieve (en tul nace desde z=0 para encapsular la tela)
+  const zBase = isTulle ? zSlabBot : (p.baseThickness - p.sinkEps)
   const zTop = p.baseThickness + p.qrReliefH
   addGridRelief(
     s, actualQr.data, actualQr.size, actualQr.size,
@@ -670,11 +658,8 @@ export function plateFootprint(
   }
 
   if (isTulle) {
-    const qrBack = layout.qrBackSize ?? p.plateW
-    const qrBackOutline = roundedRectOutline(0, layout.qrCenterY, qrBack, qrBack, p.cornerR ?? 2.5, p.outlineStep)
     return {
       outline,
-      qrBackOutline,
       hole: { cx: layout.holeCx ?? 0, cy: layout.holeCy, r: layout.holeR },
       qrRects: toMm(greedyRects(qr.data, qr.size, qr.size), qr.size, layout.qrLeft, layout.qrBottom, layout.moduleMm),
       paw: p.pawSize > 0 ? { cx: 0, cy: layout.pawCy, R: p.pawSize / 2 } : null,

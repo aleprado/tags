@@ -497,23 +497,13 @@ export default function Print3D() {
                         )}
 
                         {p.shape === 'tulle' ? (
-                          <>
-                            <path
-                              d={outlinePath(footprint.outline)}
-                              fill="rgba(0,0,0,0.03)"
-                              stroke="rgba(0,0,0,0.28)"
-                              strokeWidth="0.35"
-                              strokeDasharray="1.8,1.5"
-                            />
-                            {footprint.qrBackOutline && (
-                              <path
-                                d={outlinePath(footprint.qrBackOutline)}
-                                fill={C_BG}
-                                stroke="rgba(0,0,0,0.15)"
-                                strokeWidth="0.4"
-                              />
-                            )}
-                          </>
+                          <path
+                            d={outlinePath(footprint.outline)}
+                            fill="rgba(0,0,0,0.03)"
+                            stroke="rgba(0,0,0,0.28)"
+                            strokeWidth="0.35"
+                            strokeDasharray="1.8,1.5"
+                          />
                         ) : (
                           <path
                             d={plateOutlinePath(footprint.outline, footprint.hole, footprint.slots)}
