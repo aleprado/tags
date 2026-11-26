@@ -8,7 +8,7 @@
 import { StlWriter, type TriSink } from './stl'
 import {
   dropOutline, boneOutline, boneBodyOutline, roundedRectOutline,
-  addSlabWithHole, addCollarSlideSlab, addBorderRidge,
+  addSlabWithHole, addCollarSlideSlab, addBorderRidge, addDashedRoundedRectFrame,
   addGridRelief, addEllipseRelief, addEllipseRingRelief, addDebossedText, greedyRects,
   type Vec2, type Rect,
 } from './mesh'
@@ -300,29 +300,30 @@ export function computeLayout(p: Tag3DParams, qrModules: number): Tag3DLayout {
 
   // 2. Silueta Hueso de Collar
   if (p.shape === 'bone') {
-    const lobeR = p.boneLobeR ?? 9.5
-    const availW = p.plateW - 2 * lobeR + 8
-    const availH = p.plateH - 4
+    const R = Math.max(4, Math.min(p.boneLobeR ?? 10.5, p.plateW / 4, p.plateH / 2.2))
+    const dy = Math.max(2, p.plateH / 2 - R)
+    const availW = p.plateW - 2 * R + 4
+    const availH = Math.max(10, 2 * dy - 3.6)
     const availSquare = Math.min(availW, availH)
 
-    const qrSize = Math.max(16, (availSquare * qrModules) / (qrModules + 2 * p.quietModules))
+    const qrSize = Math.max(14, (availSquare * qrModules) / (qrModules + 2 * p.quietModules))
     const moduleMm = qrSize / qrModules
     const quietMm = p.quietModules * moduleMm
 
     const holeR = p.holeD / 2
-    const holeCy = p.plateH / 2 + holeR + 0.6
+    const holeCy = dy + holeR + 0.6
 
     const xSpan = (p.cols - 1) * p.pitchX + p.plateW
-    const ySpan = (p.rows - 1) * p.pitchY + p.plateH + 8
+    const ySpan = (p.rows - 1) * p.pitchY + p.plateH
 
-    if (p.plateW < 36 || p.plateH < 24) {
+    if (p.plateW < 40 || p.plateH < 30) {
       issues.push({ level: 'error', msg: 'Dimensiones del hueso demasiado chicas para alojar el QR.' })
     }
     if (p.sinkEps >= p.baseThickness) {
       issues.push({ level: 'error', msg: 'El relieve atraviesa la base: bajá el hundido o subí el espesor.' })
     }
-    if (p.pitchX < p.plateW || p.pitchY < p.plateH + 4) {
-      issues.push({ level: 'error', msg: `El paso vertical de la grilla debe ser de al menos ${(p.plateH + 4).toFixed(0)}mm por la argolla superior.` })
+    if (p.pitchX < p.plateW || p.pitchY < p.plateH) {
+      issues.push({ level: 'error', msg: `El paso de la grilla es chico: las chapitas se superpondrían.` })
     }
     if (Math.max(xSpan, ySpan) > p.bedSize) {
       issues.push({ level: 'error', msg: `La placa (${xSpan.toFixed(0)}×${ySpan.toFixed(0)}mm) no entra en la cama de ${p.bedSize}mm.` })
@@ -576,8 +577,12 @@ export function buildPlate(
     addBorderRidge(s, bodyOut, 1.6, zBase, zTop)
   }
 
-  // 5. Logo de la pata (en tul nace desde z=0 para encapsular la tela)
+  // 5. Logo de la pata (en tul nace desde z=0 para encapsular la tela) + marco discontinuo
   if (isTulle) {
+    addDashedRoundedRectFrame(
+      s, dx, dy, p.plateW, p.plateH, p.cornerR ?? 3,
+      0.9, 4.5, 3.5, zSlabBot, zTop, p.outlineStep,
+    )
     buildPawRelief(
       s, dx, dy + ySign * layout.pawCy, p.pawSize,
       zSlabBot, zTop, p.outlineStep, false, layout.holeR, flip,

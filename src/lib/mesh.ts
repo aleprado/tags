@@ -133,17 +133,18 @@ export function dropOutline(
 export function boneBodyOutline(
   cx: number, cy: number,
   w: number, h: number,
-  lobeR = 9.5,
+  lobeR = 10.5,
   step = 0.4,
 ): Vec2[] {
-  const R = Math.max(4, Math.min(lobeR, w / 4, h / 2.1))
+  const R = Math.max(4, Math.min(lobeR, w / 4, h / 2.2))
   const dx = w / 2 - R
   const dy = Math.max(2, h / 2 - R)
-  const dist = Math.sqrt(Math.max(0.1, R * R - dy * dy))
-  const alpha = Math.atan2(dy, dist)
+  const overlap = dy < R - 0.1
+  const dist = overlap ? Math.sqrt(R * R - dy * dy) : R
+  const alpha = overlap ? Math.atan2(dy, dist) : 0
 
   const topY = cy + dy
-  const botY = cy - dy - R
+  const botY = cy - dy
   const pts: Vec2[] = []
 
   const arc = (ax: number, ay: number, a0: number, sweep: number, r: number) => {
@@ -164,12 +165,18 @@ export function boneBodyOutline(
     }
   }
 
-  arc(cx + dx, cy - dy, -Math.PI / 2, Math.PI / 2 + alpha, R)
+  // Lóbulo inferior derecho -> pinchazo derecho -> lóbulo superior derecho
+  arc(cx + dx, cy - dy, Math.PI, Math.PI + alpha, R)
+  if (!overlap) line(cx + dx + R, cy - dy, cx + dx + R, cy + dy)
   arc(cx + dx, cy + dy, -alpha, Math.PI + alpha, R)
+  // Puente superior (cuello)
   line(cx + dx - R, topY, cx - (dx - R), topY)
+  // Lóbulo superior izquierdo -> pinchazo izquierdo -> lóbulo inferior izquierdo
   arc(cx - dx, cy + dy, 0, Math.PI + alpha, R)
-  arc(cx - dx, cy - dy, Math.PI - alpha, Math.PI / 2 + alpha, R)
-  line(cx - dx, botY, cx + dx, botY)
+  if (!overlap) line(cx - dx - R, cy + dy, cx - dx - R, cy - dy)
+  arc(cx - dx, cy - dy, Math.PI - alpha, Math.PI + alpha, R)
+  // Puente inferior (cuello simétrico)
+  line(cx - (dx - R), botY, cx + dx - R, botY)
 
   return pts
 }
@@ -177,24 +184,25 @@ export function boneBodyOutline(
 export function boneOutline(
   cx: number, cy: number,
   w: number, h: number,
-  lobeR = 9.5,
+  lobeR = 10.5,
   step = 0.4,
   eyelet: boolean | { holeD?: number; eyeletR?: number } = true,
 ): Vec2[] {
   if (eyelet === false) return boneBodyOutline(cx, cy, w, h, lobeR, step)
 
-  const R = Math.max(4, Math.min(lobeR, w / 4, h / 2.1))
+  const R = Math.max(4, Math.min(lobeR, w / 4, h / 2.2))
   const dx = w / 2 - R
   const dy = Math.max(2, h / 2 - R)
-  const dist = Math.sqrt(Math.max(0.1, R * R - dy * dy))
-  const alpha = Math.atan2(dy, dist)
+  const overlap = dy < R - 0.1
+  const dist = overlap ? Math.sqrt(R * R - dy * dy) : R
+  const alpha = overlap ? Math.atan2(dy, dist) : 0
 
   const topY = cy + dy
-  const botY = cy - dy - R
+  const botY = cy - dy
 
   const holeD = typeof eyelet === 'object' && eyelet?.holeD ? eyelet.holeD : 3.6
   const holeR = holeD / 2
-  const eyeR = typeof eyelet === 'object' && eyelet?.eyeletR ? eyelet.eyeletR : 4.2
+  const eyeR = typeof eyelet === 'object' && eyelet?.eyeletR ? eyelet.eyeletR : Math.max(4.0, holeR + 2.2)
   const eyeCy = topY + holeR + 0.6
   const blendR = 1.8
   const blendCy = topY + blendR
@@ -224,7 +232,8 @@ export function boneOutline(
     }
   }
 
-  arc(cx + dx, cy - dy, -Math.PI / 2, Math.PI / 2 + alpha, R)
+  arc(cx + dx, cy - dy, Math.PI, Math.PI + alpha, R)
+  if (!overlap) line(cx + dx + R, cy - dy, cx + dx + R, cy + dy)
   arc(cx + dx, cy + dy, -alpha, Math.PI + alpha, R)
   line(cx + dx - R, topY, blendRightCx, topY)
   arc(blendRightCx, blendCy, -Math.PI / 2, -Math.PI / 2 + beta, blendR)
@@ -232,8 +241,9 @@ export function boneOutline(
   arc(blendLeftCx, blendCy, -beta, -Math.PI / 2 + beta, blendR)
   line(blendLeftCx, topY, cx - (dx - R), topY)
   arc(cx - dx, cy + dy, 0, Math.PI + alpha, R)
-  arc(cx - dx, cy - dy, Math.PI - alpha, Math.PI / 2 + alpha, R)
-  line(cx - dx, botY, cx + dx, botY)
+  if (!overlap) line(cx - dx - R, cy + dy, cx - dx - R, cy - dy)
+  arc(cx - dx, cy - dy, Math.PI - alpha, Math.PI + alpha, R)
+  line(cx - (dx - R), botY, cx + dx - R, botY)
 
   return pts
 }
@@ -537,6 +547,95 @@ export function addSolidSlab(
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n
     s.tri(cTop, [topRing[i].x, topRing[i].y, z1], [topRing[j].x, topRing[j].y, z1])
+  }
+}
+
+/**
+ * Marco discontinuo (línea de rayas) siguiendo un rectángulo con esquinas redondeadas.
+ * Marca el perímetro sobre el tul sin darle rigidez a la etiqueta.
+ */
+export function addDashedRoundedRectFrame(
+  s: TriSink,
+  cx: number,
+  cy: number,
+  w: number,
+  h: number,
+  cornerR: number,
+  lineW: number,
+  dashLen: number,
+  gapLen: number,
+  z0: number,
+  z1: number,
+  step = 0.6,
+): void {
+  const halfW = lineW / 2
+  const rMid = Math.max(0.4, cornerR - halfW)
+  const pts = roundedRectOutline(cx, cy, Math.max(2, w - lineW), Math.max(2, h - lineW), rMid, step)
+  const n = pts.length
+  if (n < 4) return
+
+  const cum = new Float64Array(n + 1)
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n
+    cum[i + 1] = cum[i] + Math.hypot(pts[j].x - pts[i].x, pts[j].y - pts[i].y)
+  }
+  const totalLen = cum[n]
+  if (totalLen < 4) return
+
+  const count = Math.max(4, Math.round(totalLen / (dashLen + gapLen)))
+  const period = totalLen / count
+  const actualDash = period * (dashLen / (dashLen + gapLen))
+
+  const sampleAt = (dist: number): { x: number; y: number; nx: number; ny: number } => {
+    const d = ((dist % totalLen) + totalLen) % totalLen
+    let lo = 0, hi = n - 1
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1
+      if (cum[mid] <= d) lo = mid
+      else hi = mid - 1
+    }
+    const j = (lo + 1) % n
+    const segLen = cum[lo + 1] - cum[lo]
+    const t = segLen > 1e-9 ? (d - cum[lo]) / segLen : 0
+    const x = pts[lo].x + (pts[j].x - pts[lo].x) * t
+    const y = pts[lo].y + (pts[j].y - pts[lo].y) * t
+    const tx = segLen > 1e-9 ? (pts[j].x - pts[lo].x) / segLen : 1
+    const ty = segLen > 1e-9 ? (pts[j].y - pts[lo].y) / segLen : 0
+    // Normal hacia afuera (contorno antihorario -> derecha de la tangente)
+    return { x, y, nx: ty, ny: -tx }
+  }
+
+  for (let k = 0; k < count; k++) {
+    const sStart = k * period
+    const segs = Math.max(1, Math.ceil(actualDash / step))
+    const outerPts: Vec2[] = []
+    const innerPts: Vec2[] = []
+    for (let i = 0; i <= segs; i++) {
+      const p = sampleAt(sStart + (actualDash * i) / segs)
+      outerPts.push({ x: p.x + p.nx * halfW, y: p.y + p.ny * halfW })
+      innerPts.push({ x: p.x - p.nx * halfW, y: p.y - p.ny * halfW })
+    }
+    for (let i = 0; i < segs; i++) {
+      const o0 = outerPts[i], o1 = outerPts[i + 1]
+      const i0 = innerPts[i], i1 = innerPts[i + 1]
+      // Top & bottom
+      s.tri([i0.x, i0.y, z1], [o0.x, o0.y, z1], [o1.x, o1.y, z1])
+      s.tri([i0.x, i0.y, z1], [o1.x, o1.y, z1], [i1.x, i1.y, z1])
+      s.tri([i0.x, i0.y, z0], [o1.x, o1.y, z0], [o0.x, o0.y, z0])
+      s.tri([i0.x, i0.y, z0], [i1.x, i1.y, z0], [o1.x, o1.y, z0])
+      // Outer & inner walls
+      s.tri([o0.x, o0.y, z0], [o1.x, o1.y, z0], [o1.x, o1.y, z1])
+      s.tri([o0.x, o0.y, z0], [o1.x, o1.y, z1], [o0.x, o0.y, z1])
+      s.tri([i1.x, i1.y, z0], [i0.x, i0.y, z0], [i0.x, i0.y, z1])
+      s.tri([i1.x, i1.y, z0], [i0.x, i0.y, z1], [i1.x, i1.y, z1])
+    }
+    // End caps
+    const oS = outerPts[0], iS = innerPts[0]
+    s.tri([iS.x, iS.y, z0], [oS.x, oS.y, z0], [oS.x, oS.y, z1])
+    s.tri([iS.x, iS.y, z0], [oS.x, oS.y, z1], [iS.x, iS.y, z1])
+    const oE = outerPts[segs], iE = innerPts[segs]
+    s.tri([oE.x, oE.y, z0], [iE.x, iE.y, z0], [iE.x, iE.y, z1])
+    s.tri([oE.x, oE.y, z0], [iE.x, iE.y, z1], [oE.x, oE.y, z1])
   }
 }
 

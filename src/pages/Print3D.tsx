@@ -250,9 +250,9 @@ export default function Print3D() {
                       }}
                       onClick={() => setP(prev => ({
                         ...prev,
-                        shape: 'bone', plateW: 55, plateH: 35, boneLobeR: 9.5,
+                        shape: 'bone', plateW: 68, plateH: 46, boneLobeR: 10.5,
                         baseThickness: 5, qrReliefH: 0.8, chamfer: 1.0,
-                        holeD: 3.5, pitchX: 58, pitchY: 44, pawSize: 0,
+                        holeD: 3.5, cols: 2, rows: 3, pitchX: 72, pitchY: 50, pawSize: 0,
                         debossBackText: true,
                       }))}
                     >
@@ -287,9 +287,9 @@ export default function Print3D() {
                         baseThickness: 1.2,
                         qrReliefH: 0.4,
                         chamfer: 0.2,
-                        holeD: 3.5,
+                        holeD: 4.5,
                         holeMarginTop: 3.0,
-                        pawSize: 15,
+                        pawSize: 16,
                         cols: 4,
                         rows: 3,
                         pitchX: 36,
@@ -499,10 +499,10 @@ export default function Print3D() {
                         {p.shape === 'tulle' ? (
                           <path
                             d={outlinePath(footprint.outline)}
-                            fill="rgba(0,0,0,0.03)"
-                            stroke="rgba(0,0,0,0.28)"
-                            strokeWidth="0.35"
-                            strokeDasharray="1.8,1.5"
+                            fill="rgba(0,0,0,0.02)"
+                            stroke={C_FG}
+                            strokeWidth="0.9"
+                            strokeDasharray="4.5,3.5"
                           />
                         ) : (
                           <path
