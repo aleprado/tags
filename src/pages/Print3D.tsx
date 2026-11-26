@@ -250,9 +250,9 @@ export default function Print3D() {
                       }}
                       onClick={() => setP(prev => ({
                         ...prev,
-                        shape: 'bone', plateW: 68, plateH: 46, boneLobeR: 10.5,
+                        shape: 'bone', plateW: 66, plateH: 38, boneLobeR: 10.3,
                         baseThickness: 5, qrReliefH: 0.8, chamfer: 1.0,
-                        holeD: 3.5, cols: 2, rows: 3, pitchX: 72, pitchY: 50, pawSize: 0,
+                        holeD: 3.5, cols: 2, rows: 3, pitchX: 70, pitchY: 44, pawSize: 0,
                         debossBackText: true,
                       }))}
                     >

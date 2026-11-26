@@ -300,11 +300,11 @@ export function computeLayout(p: Tag3DParams, qrModules: number): Tag3DLayout {
 
   // 2. Silueta Hueso de Collar
   if (p.shape === 'bone') {
-    const minRForPinch = p.plateH / 3.7
-    const R = Math.max(4, Math.min(p.plateW / 4.2, Math.max(p.boneLobeR ?? 11.5, minRForPinch), p.plateH / 2.2))
-    const dy = Math.max(2, p.plateH / 2 - R)
+    const R = Math.max(4, Math.min(p.plateW / 4.5, Math.max(p.boneLobeR ?? 10.3, p.plateH / 3.85), p.plateH / 2.4))
+    const dy = Math.max(1.5, p.plateH / 2 - R)
+    const barHalfH = Math.min(p.plateH * 0.345, dy + R * 0.55)
     const availW = p.plateW - 2 * R + 4
-    const availH = Math.max(10, 2 * dy - 3.6)
+    const availH = Math.max(10, 2 * barHalfH - 3.6)
     const availSquare = Math.min(availW, availH)
 
     const qrSize = Math.max(14, (availSquare * qrModules) / (qrModules + 2 * p.quietModules))
@@ -312,10 +312,10 @@ export function computeLayout(p: Tag3DParams, qrModules: number): Tag3DLayout {
     const quietMm = p.quietModules * moduleMm
 
     const holeR = p.holeD / 2
-    const holeCy = dy + holeR + 0.6
+    const holeCy = barHalfH + holeR + 0.6
 
     const xSpan = (p.cols - 1) * p.pitchX + p.plateW
-    const ySpan = (p.rows - 1) * p.pitchY + p.plateH
+    const ySpan = (p.rows - 1) * p.pitchY + Math.max(p.plateH, 2 * (holeCy + holeR + 2.0))
 
     if (p.plateW < 40 || p.plateH < 30) {
       issues.push({ level: 'error', msg: 'Dimensiones del hueso demasiado chicas para alojar el QR.' })

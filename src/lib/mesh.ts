@@ -130,23 +130,33 @@ export function dropOutline(
 
 // ─── Contornos de Hueso ──────────────────────────────────────────────────────
 
-export function boneBodyOutline(
-  cx: number, cy: number,
-  w: number, h: number,
-  lobeR = 11.5,
-  step = 0.4,
-): Vec2[] {
-  // Aseguramos que los dos lóbulos de cada extremo siempre se solapen un poco (dy < R)
-  // para formar el clásico pinchazo de hueso de perro, nunca paredes rectas.
-  const minRForPinch = h / 3.7
-  const R = Math.max(4, Math.min(w / 4.2, Math.max(lobeR, minRForPinch), h / 2.2))
+function boneGeometryParams(w: number, h: number, lobeR: number) {
+  const R = Math.max(4, Math.min(w / 4.5, Math.max(lobeR, h / 3.85), h / 2.4))
   const dx = w / 2 - R
-  const dy = Math.max(2, h / 2 - R)
+  const dy = Math.max(1.5, h / 2 - R)
   const dist = Math.sqrt(Math.max(0.25, R * R - dy * dy))
   const alpha = Math.atan2(dy, dist)
 
-  const topY = cy + dy
-  const botY = cy - dy
+  // Barra central más alta (~69% del alto total) con fillet cóncavo suave hacia los lóbulos
+  const barHalfH = Math.min(h * 0.345, dy + R * 0.55)
+  const fR = Math.max(1.5, Math.min(3.5, (dy + R - barHalfH) * 0.55))
+  const filletCy = barHalfH + fR
+  const dyF = filletCy - dy
+  const dxF = Math.sqrt(Math.max(0.25, (R + fR) ** 2 - dyF ** 2))
+  const filletCx = Math.max(4, dx - dxF)
+
+  return { R, dx, dy, alpha, barHalfH, fR, filletCx, filletCy }
+}
+
+export function boneBodyOutline(
+  cx: number, cy: number,
+  w: number, h: number,
+  lobeR = 10.3,
+  step = 0.4,
+): Vec2[] {
+  const { R, dx, dy, alpha, barHalfH, fR, filletCx, filletCy } = boneGeometryParams(w, h, lobeR)
+  const topY = cy + barHalfH
+  const botY = cy - barHalfH
   const pts: Vec2[] = []
 
   const arc = (ax: number, ay: number, a0: number, sweep: number, r: number) => {
@@ -167,16 +177,39 @@ export function boneBodyOutline(
     }
   }
 
-  // Lóbulo inferior derecho -> pinchazo derecho -> lóbulo superior derecho
-  arc(cx + dx, cy - dy, Math.PI, Math.PI + alpha, R)
-  arc(cx + dx, cy + dy, -alpha, Math.PI + alpha, R)
-  // Puente superior (cuello)
-  line(cx + dx - R, topY, cx - (dx - R), topY)
-  // Lóbulo superior izquierdo -> pinchazo izquierdo -> lóbulo inferior izquierdo
-  arc(cx - dx, cy + dy, 0, Math.PI + alpha, R)
-  arc(cx - dx, cy - dy, Math.PI - alpha, Math.PI + alpha, R)
-  // Puente inferior (cuello simétrico)
-  line(cx - (dx - R), botY, cx + dx - R, botY)
+  // Ángulos de tangencia entre lóbulos y fillets
+  const trLobeEnd = Math.atan2(filletCy - dy, filletCx - dx)
+  const trFilletStart = trLobeEnd - Math.PI
+  const trFilletSweep = (-Math.PI / 2) - trFilletStart
+
+  const tlFilletStart = -Math.PI / 2
+  const tlLobeStart = Math.atan2(filletCy - dy, -(filletCx - dx)) // en (0, π/2)
+  const tlFilletEnd = tlLobeStart - Math.PI // en (-π, -π/2)
+  const tlFilletSweep = tlFilletEnd - tlFilletStart
+
+  const blLobeEnd = Math.atan2(-(filletCy - dy), -(filletCx - dx)) // en (-π/2, 0)
+  const blFilletStart = blLobeEnd + Math.PI // en (π/2, π)
+  const blFilletSweep = (Math.PI / 2) - blFilletStart
+
+  const brFilletStart = Math.PI / 2
+  const brLobeStart = Math.atan2(-(filletCy - dy), filletCx - dx) // en (-π, -π/2)
+  const brFilletEnd = brLobeStart + Math.PI // en (0, π/2)
+  const brFilletSweep = brFilletEnd - brFilletStart
+
+  // Lóbulo inferior derecho -> pinchazo derecho -> lóbulo superior derecho -> fillet superior derecho
+  arc(cx + dx, cy - dy, brLobeStart, (2 * Math.PI + alpha) - brLobeStart, R)
+  arc(cx + dx, cy + dy, -alpha, trLobeEnd - (-alpha), R)
+  arc(cx + filletCx, cy + filletCy, trFilletStart, trFilletSweep, fR)
+  // Barra superior
+  line(cx + filletCx, topY, cx - filletCx, topY)
+  // Fillet superior izquierdo -> lóbulo superior izquierdo -> pinchazo izquierdo -> lóbulo inferior izquierdo
+  arc(cx - filletCx, cy + filletCy, tlFilletStart, tlFilletSweep, fR)
+  arc(cx - dx, cy + dy, tlLobeStart, (Math.PI + alpha) - tlLobeStart, R)
+  arc(cx - dx, cy - dy, Math.PI - alpha, (2 * Math.PI + blLobeEnd) - (Math.PI - alpha), R)
+  // Fillet inferior izquierdo -> barra inferior -> fillet inferior derecho
+  arc(cx - filletCx, cy - filletCy, blFilletStart, blFilletSweep, fR)
+  line(cx - filletCx, botY, cx + filletCx, botY)
+  arc(cx + filletCx, cy - filletCy, brFilletStart, brFilletSweep, fR)
 
   return pts
 }
@@ -184,25 +217,19 @@ export function boneBodyOutline(
 export function boneOutline(
   cx: number, cy: number,
   w: number, h: number,
-  lobeR = 11.5,
+  lobeR = 10.3,
   step = 0.4,
   eyelet: boolean | { holeD?: number; eyeletR?: number } = true,
 ): Vec2[] {
   if (eyelet === false) return boneBodyOutline(cx, cy, w, h, lobeR, step)
 
-  const minRForPinch = h / 3.7
-  const R = Math.max(4, Math.min(w / 4.2, Math.max(lobeR, minRForPinch), h / 2.2))
-  const dx = w / 2 - R
-  const dy = Math.max(2, h / 2 - R)
-  const dist = Math.sqrt(Math.max(0.25, R * R - dy * dy))
-  const alpha = Math.atan2(dy, dist)
-
-  const topY = cy + dy
-  const botY = cy - dy
+  const { R, dx, dy, alpha, barHalfH, fR, filletCx, filletCy } = boneGeometryParams(w, h, lobeR)
+  const topY = cy + barHalfH
+  const botY = cy - barHalfH
 
   const holeD = typeof eyelet === 'object' && eyelet?.holeD ? eyelet.holeD : 3.6
   const holeR = holeD / 2
-  const eyeR = typeof eyelet === 'object' && eyelet?.eyeletR ? eyelet.eyeletR : Math.max(4.0, holeR + 2.2)
+  const eyeR = typeof eyelet === 'object' && eyelet?.eyeletR ? eyelet.eyeletR : Math.max(3.8, holeR + 2.0)
   const eyeCy = topY + holeR + 0.6
   const blendR = 1.8
   const blendCy = topY + blendR
@@ -211,13 +238,30 @@ export function boneOutline(
   const blendRightCx = cx + dxE
   const blendLeftCx = cx - dxE
 
-  // Ángulos exactos de tangencia sin bucles invertidos
-  const rightBlendEnd = Math.atan2(dyE, -dxE) - 2 * Math.PI // en (-3π/2, -π)
-  const rightBlendSweep = rightBlendEnd - (-Math.PI / 2)      // negativo (horario)
-  const eyeStart = Math.atan2(-dyE, dxE)                     // en (-π/2, π/2)
-  const eyeSweep = Math.PI - 2 * eyeStart                    // positivo (antihorario)
-  const leftBlendStart = Math.atan2(dyE, dxE)                // en (-π/2, π/2)
-  const leftBlendSweep = -Math.PI / 2 - leftBlendStart       // negativo (horario)
+  const rightBlendEnd = Math.atan2(dyE, -dxE) - 2 * Math.PI
+  const rightBlendSweep = rightBlendEnd - (-Math.PI / 2)
+  const eyeStart = Math.atan2(-dyE, dxE)
+  const eyeSweep = Math.PI - 2 * eyeStart
+  const leftBlendStart = Math.atan2(dyE, dxE)
+  const leftBlendSweep = -Math.PI / 2 - leftBlendStart
+
+  const trLobeEnd = Math.atan2(filletCy - dy, filletCx - dx)
+  const trFilletStart = trLobeEnd - Math.PI
+  const trFilletSweep = (-Math.PI / 2) - trFilletStart
+
+  const tlFilletStart = -Math.PI / 2
+  const tlLobeStart = Math.atan2(filletCy - dy, -(filletCx - dx))
+  const tlFilletEnd = tlLobeStart - Math.PI
+  const tlFilletSweep = tlFilletEnd - tlFilletStart
+
+  const blLobeEnd = Math.atan2(-(filletCy - dy), -(filletCx - dx))
+  const blFilletStart = blLobeEnd + Math.PI
+  const blFilletSweep = (Math.PI / 2) - blFilletStart
+
+  const brFilletStart = Math.PI / 2
+  const brLobeStart = Math.atan2(-(filletCy - dy), filletCx - dx)
+  const brFilletEnd = brLobeStart + Math.PI
+  const brFilletSweep = brFilletEnd - brFilletStart
 
   const pts: Vec2[] = []
 
@@ -239,16 +283,20 @@ export function boneOutline(
     }
   }
 
-  arc(cx + dx, cy - dy, Math.PI, Math.PI + alpha, R)
-  arc(cx + dx, cy + dy, -alpha, Math.PI + alpha, R)
-  line(cx + dx - R, topY, blendRightCx, topY)
+  arc(cx + dx, cy - dy, brLobeStart, (2 * Math.PI + alpha) - brLobeStart, R)
+  arc(cx + dx, cy + dy, -alpha, trLobeEnd - (-alpha), R)
+  arc(cx + filletCx, cy + filletCy, trFilletStart, trFilletSweep, fR)
+  line(cx + filletCx, topY, blendRightCx, topY)
   arc(blendRightCx, blendCy, -Math.PI / 2, rightBlendSweep, blendR)
   arc(cx, eyeCy, eyeStart, eyeSweep, eyeR)
   arc(blendLeftCx, blendCy, leftBlendStart, leftBlendSweep, blendR)
-  line(blendLeftCx, topY, cx - (dx - R), topY)
-  arc(cx - dx, cy + dy, 0, Math.PI + alpha, R)
-  arc(cx - dx, cy - dy, Math.PI - alpha, Math.PI + alpha, R)
-  line(cx - (dx - R), botY, cx + dx - R, botY)
+  line(blendLeftCx, topY, cx - filletCx, topY)
+  arc(cx - filletCx, cy + filletCy, tlFilletStart, tlFilletSweep, fR)
+  arc(cx - dx, cy + dy, tlLobeStart, (Math.PI + alpha) - tlLobeStart, R)
+  arc(cx - dx, cy - dy, Math.PI - alpha, (2 * Math.PI + blLobeEnd) - (Math.PI - alpha), R)
+  arc(cx - filletCx, cy - filletCy, blFilletStart, blFilletSweep, fR)
+  line(cx - filletCx, botY, cx + filletCx, botY)
+  arc(cx + filletCx, cy - filletCy, brFilletStart, brFilletSweep, fR)
 
   return pts
 }
