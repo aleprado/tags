@@ -133,15 +133,17 @@ export function dropOutline(
 export function boneBodyOutline(
   cx: number, cy: number,
   w: number, h: number,
-  lobeR = 10.5,
+  lobeR = 11.5,
   step = 0.4,
 ): Vec2[] {
-  const R = Math.max(4, Math.min(lobeR, w / 4, h / 2.2))
+  // Aseguramos que los dos lóbulos de cada extremo siempre se solapen un poco (dy < R)
+  // para formar el clásico pinchazo de hueso de perro, nunca paredes rectas.
+  const minRForPinch = h / 3.7
+  const R = Math.max(4, Math.min(w / 4.2, Math.max(lobeR, minRForPinch), h / 2.2))
   const dx = w / 2 - R
   const dy = Math.max(2, h / 2 - R)
-  const overlap = dy < R - 0.1
-  const dist = overlap ? Math.sqrt(R * R - dy * dy) : R
-  const alpha = overlap ? Math.atan2(dy, dist) : 0
+  const dist = Math.sqrt(Math.max(0.25, R * R - dy * dy))
+  const alpha = Math.atan2(dy, dist)
 
   const topY = cy + dy
   const botY = cy - dy
@@ -167,13 +169,11 @@ export function boneBodyOutline(
 
   // Lóbulo inferior derecho -> pinchazo derecho -> lóbulo superior derecho
   arc(cx + dx, cy - dy, Math.PI, Math.PI + alpha, R)
-  if (!overlap) line(cx + dx + R, cy - dy, cx + dx + R, cy + dy)
   arc(cx + dx, cy + dy, -alpha, Math.PI + alpha, R)
   // Puente superior (cuello)
   line(cx + dx - R, topY, cx - (dx - R), topY)
   // Lóbulo superior izquierdo -> pinchazo izquierdo -> lóbulo inferior izquierdo
   arc(cx - dx, cy + dy, 0, Math.PI + alpha, R)
-  if (!overlap) line(cx - dx - R, cy + dy, cx - dx - R, cy - dy)
   arc(cx - dx, cy - dy, Math.PI - alpha, Math.PI + alpha, R)
   // Puente inferior (cuello simétrico)
   line(cx - (dx - R), botY, cx + dx - R, botY)
@@ -184,18 +184,18 @@ export function boneBodyOutline(
 export function boneOutline(
   cx: number, cy: number,
   w: number, h: number,
-  lobeR = 10.5,
+  lobeR = 11.5,
   step = 0.4,
   eyelet: boolean | { holeD?: number; eyeletR?: number } = true,
 ): Vec2[] {
   if (eyelet === false) return boneBodyOutline(cx, cy, w, h, lobeR, step)
 
-  const R = Math.max(4, Math.min(lobeR, w / 4, h / 2.2))
+  const minRForPinch = h / 3.7
+  const R = Math.max(4, Math.min(w / 4.2, Math.max(lobeR, minRForPinch), h / 2.2))
   const dx = w / 2 - R
   const dy = Math.max(2, h / 2 - R)
-  const overlap = dy < R - 0.1
-  const dist = overlap ? Math.sqrt(R * R - dy * dy) : R
-  const alpha = overlap ? Math.atan2(dy, dist) : 0
+  const dist = Math.sqrt(Math.max(0.25, R * R - dy * dy))
+  const alpha = Math.atan2(dy, dist)
 
   const topY = cy + dy
   const botY = cy - dy
@@ -206,11 +206,18 @@ export function boneOutline(
   const eyeCy = topY + holeR + 0.6
   const blendR = 1.8
   const blendCy = topY + blendR
-  const dyE = blendCy - eyeCy
+  const dyE = eyeCy - blendCy
   const dxE = Math.sqrt(Math.max(0.1, (eyeR + blendR) ** 2 - dyE ** 2))
   const blendRightCx = cx + dxE
   const blendLeftCx = cx - dxE
-  const beta = Math.atan2(dyE, dxE)
+
+  // Ángulos exactos de tangencia sin bucles invertidos
+  const rightBlendEnd = Math.atan2(dyE, -dxE) - 2 * Math.PI // en (-3π/2, -π)
+  const rightBlendSweep = rightBlendEnd - (-Math.PI / 2)      // negativo (horario)
+  const eyeStart = Math.atan2(-dyE, dxE)                     // en (-π/2, π/2)
+  const eyeSweep = Math.PI - 2 * eyeStart                    // positivo (antihorario)
+  const leftBlendStart = Math.atan2(dyE, dxE)                // en (-π/2, π/2)
+  const leftBlendSweep = -Math.PI / 2 - leftBlendStart       // negativo (horario)
 
   const pts: Vec2[] = []
 
@@ -233,15 +240,13 @@ export function boneOutline(
   }
 
   arc(cx + dx, cy - dy, Math.PI, Math.PI + alpha, R)
-  if (!overlap) line(cx + dx + R, cy - dy, cx + dx + R, cy + dy)
   arc(cx + dx, cy + dy, -alpha, Math.PI + alpha, R)
   line(cx + dx - R, topY, blendRightCx, topY)
-  arc(blendRightCx, blendCy, -Math.PI / 2, -Math.PI / 2 + beta, blendR)
-  arc(cx, eyeCy, beta, Math.PI - 2 * beta, eyeR)
-  arc(blendLeftCx, blendCy, -beta, -Math.PI / 2 + beta, blendR)
+  arc(blendRightCx, blendCy, -Math.PI / 2, rightBlendSweep, blendR)
+  arc(cx, eyeCy, eyeStart, eyeSweep, eyeR)
+  arc(blendLeftCx, blendCy, leftBlendStart, leftBlendSweep, blendR)
   line(blendLeftCx, topY, cx - (dx - R), topY)
   arc(cx - dx, cy + dy, 0, Math.PI + alpha, R)
-  if (!overlap) line(cx - dx - R, cy + dy, cx - dx - R, cy - dy)
   arc(cx - dx, cy - dy, Math.PI - alpha, Math.PI + alpha, R)
   line(cx - (dx - R), botY, cx + dx - R, botY)
 
@@ -330,11 +335,27 @@ function triangulateWithHoleEarClip(outer: Vec2[], hole: { cx: number; cy: numbe
     if (holePts[i].x > holePts[bestHoleIdx].x) bestHoleIdx = i
   }
   const hPt = holePts[bestHoleIdx]
-  let bestDist = Infinity
+  // Rayo horizontal +X desde hPt para encontrar una arista visible sin cruzar el contorno
+  let bestHitX = Infinity
   let bestOuterIdx = 0
   for (let i = 0; i < outer.length; i++) {
-    const d = Math.hypot(outer[i].x - hPt.x, outer[i].y - hPt.y)
-    if (d < bestDist) { bestDist = d; bestOuterIdx = i }
+    const a = outer[i]
+    const b = outer[(i + 1) % outer.length]
+    if ((a.y <= hPt.y && b.y > hPt.y) || (b.y <= hPt.y && a.y > hPt.y)) {
+      const t = (hPt.y - a.y) / (b.y - a.y)
+      const hitX = a.x + t * (b.x - a.x)
+      if (hitX > hPt.x && hitX < bestHitX) {
+        bestHitX = hitX
+        bestOuterIdx = a.x >= b.x ? i : (i + 1) % outer.length
+      }
+    }
+  }
+  if (!Number.isFinite(bestHitX)) {
+    let bestDist = Infinity
+    for (let i = 0; i < outer.length; i++) {
+      const d = Math.hypot(outer[i].x - hPt.x, outer[i].y - hPt.y)
+      if (d < bestDist) { bestDist = d; bestOuterIdx = i }
+    }
   }
 
   const poly: Vec2[] = []

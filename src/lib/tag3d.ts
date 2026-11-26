@@ -300,7 +300,8 @@ export function computeLayout(p: Tag3DParams, qrModules: number): Tag3DLayout {
 
   // 2. Silueta Hueso de Collar
   if (p.shape === 'bone') {
-    const R = Math.max(4, Math.min(p.boneLobeR ?? 10.5, p.plateW / 4, p.plateH / 2.2))
+    const minRForPinch = p.plateH / 3.7
+    const R = Math.max(4, Math.min(p.plateW / 4.2, Math.max(p.boneLobeR ?? 11.5, minRForPinch), p.plateH / 2.2))
     const dy = Math.max(2, p.plateH / 2 - R)
     const availW = p.plateW - 2 * R + 4
     const availH = Math.max(10, 2 * dy - 3.6)
