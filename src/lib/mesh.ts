@@ -197,7 +197,7 @@ export function boneBodyOutline(
   const brFilletSweep = brFilletEnd - brFilletStart
 
   // Lóbulo inferior derecho -> pinchazo derecho -> lóbulo superior derecho -> fillet superior derecho
-  arc(cx + dx, cy - dy, brLobeStart, (2 * Math.PI + alpha) - brLobeStart, R)
+  arc(cx + dx, cy - dy, brLobeStart, alpha - brLobeStart, R)
   arc(cx + dx, cy + dy, -alpha, trLobeEnd - (-alpha), R)
   arc(cx + filletCx, cy + filletCy, trFilletStart, trFilletSweep, fR)
   // Barra superior
@@ -283,7 +283,7 @@ export function boneOutline(
     }
   }
 
-  arc(cx + dx, cy - dy, brLobeStart, (2 * Math.PI + alpha) - brLobeStart, R)
+  arc(cx + dx, cy - dy, brLobeStart, alpha - brLobeStart, R)
   arc(cx + dx, cy + dy, -alpha, trLobeEnd - (-alpha), R)
   arc(cx + filletCx, cy + filletCy, trFilletStart, trFilletSweep, fR)
   line(cx + filletCx, topY, blendRightCx, topY)
