@@ -252,7 +252,7 @@ export default function Print3D() {
                         ...prev,
                         shape: 'bone', plateW: 66, plateH: 38, boneLobeR: 10.3,
                         baseThickness: 5, qrReliefH: 0.8, chamfer: 1.0,
-                        holeD: 3.5, cols: 2, rows: 3, pitchX: 70, pitchY: 44, pawSize: 0,
+                        holeD: 3.5, cols: 2, rows: 3, pitchX: 70, pitchY: 44, pawSize: 9,
                         debossBackText: true,
                       }))}
                     >
@@ -391,10 +391,12 @@ export default function Print3D() {
                       <Num label="Logo pata Ø" suffix="mm" value={p.pawSize} min={0} onChange={v => set('pawSize', v)} />
                     </>
                   )}
-                  {p.shape === 'tulle' && (
+                  {(p.shape === 'tulle' || p.shape === 'bone') && (
                     <>
-                      <Num label="Margen sup. logo" suffix="mm" value={p.holeMarginTop} min={0} onChange={v => set('holeMarginTop', v)} />
-                      <Num label="Logo pata Ø" suffix="mm" value={p.pawSize} min={1} onChange={v => set('pawSize', v)} />
+                      {p.shape === 'tulle' && (
+                        <Num label="Margen sup. logo" suffix="mm" value={p.holeMarginTop} min={0} onChange={v => set('holeMarginTop', v)} />
+                      )}
+                      <Num label="Logo pata Ø" suffix="mm" value={p.pawSize} min={p.shape === 'tulle' ? 1 : 0} onChange={v => set('pawSize', v)} />
                     </>
                   )}
 

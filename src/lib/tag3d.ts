@@ -152,6 +152,7 @@ export interface Tag3DLayout {
   holeCy: number
   holeR: number
   sideMarginMm: number
+  pawCx?: number
   pawCy: number
   qrBackSize?: number
   slotTopY?: number
@@ -314,6 +315,10 @@ export function computeLayout(p: Tag3DParams, qrModules: number): Tag3DLayout {
     const holeR = p.holeD / 2
     const holeCy = barHalfH + holeR + 0.6
 
+    const lobeDx = p.plateW / 2 - R
+    const pawCx = lobeDx - 0.5
+    const pawCy = -dy + 0.5
+
     const xSpan = (p.cols - 1) * p.pitchX + p.plateW
     const ySpan = (p.rows - 1) * p.pitchY + Math.max(p.plateH, 2 * (holeCy + holeR + 2.0))
 
@@ -342,7 +347,8 @@ export function computeLayout(p: Tag3DParams, qrModules: number): Tag3DLayout {
       holeCy,
       holeR,
       sideMarginMm: (p.plateW - qrSize) / 2,
-      pawCy: 0,
+      pawCx,
+      pawCy,
       platesPerSheet: p.cols * p.rows,
       sheetSpanX: xSpan,
       sheetSpanY: ySpan,
@@ -578,7 +584,7 @@ export function buildPlate(
     addBorderRidge(s, bodyOut, 1.6, zBase, zTop)
   }
 
-  // 5. Logo de la pata (en tul nace desde z=0 para encapsular la tela) + marco discontinuo
+  // 5. Logo de la pata (en tul nace desde z=0 para encapsular la tela; en hueso va en el lóbulo inferior derecho) + marco discontinuo
   if (isTulle) {
     addDashedRoundedRectFrame(
       s, dx, dy, p.plateW, p.plateH, p.cornerR ?? 3,
@@ -588,9 +594,9 @@ export function buildPlate(
       s, dx, dy + ySign * layout.pawCy, p.pawSize,
       zSlabBot, zTop, p.outlineStep, false, layout.holeR, flip,
     )
-  } else if (!isBone && !isSlide) {
+  } else if (!isSlide) {
     buildPawRelief(
-      s, dx, dy + ySign * layout.pawCy, p.pawSize,
+      s, dx + (layout.pawCx ?? 0), dy + ySign * layout.pawCy, p.pawSize,
       zBase, zTop, p.outlineStep, false, 0, flip,
     )
   }
@@ -659,7 +665,7 @@ export function plateFootprint(
       bodyOutline,
       hole: { cx: layout.holeCx ?? 0, cy: layout.holeCy, r: layout.holeR },
       qrRects: toMm(greedyRects(qr.data, qr.size, qr.size), qr.size, layout.qrLeft, layout.qrBottom, layout.moduleMm),
-      paw: null,
+      paw: p.pawSize > 0 ? { cx: layout.pawCx ?? 0, cy: layout.pawCy, R: p.pawSize / 2 } : null,
     }
   }
 
